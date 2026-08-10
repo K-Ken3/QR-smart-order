@@ -1,0 +1,423 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum LocationType {
+  DINING_TABLE
+  HOTEL_ROOM
+  LOUNGE_SEAT
+  HOSPITAL_BED
+  MEETING_ROOM
+  POOLSIDE
+}
+
+enum LocationStatus {
+  AVAILABLE
+  UNAVAILABLE
+}
+
+enum QrValidity {
+  HOURS_24
+  DAYS_7
+  DAYS_30
+  NON_EXPIRING
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  BUSINESS_OWNER
+  BRANCH_MANAGER
+  RECEPTIONIST
+  KITCHEN_STAFF
+  EMPLOYEE
+  GUEST
+}
+
+enum SourceType {
+  QR_SCAN
+  IOT_BUTTON
+}
+
+enum RequestStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceType {
+  FOOD_AND_BEVERAGE
+  HOUSEKEEPING
+  WAITER_CALL
+  MAINTENANCE
+  AMENITY_REQUEST
+  CUSTOM
+}
+
+enum MenuItemCategory {
+  FOOD
+  BEVERAGE
+  DESSERT
+  AMENITY
+  CUSTOM
+}
+
+enum MenuItemStatus {
+  AVAILABLE
+  UNAVAILABLE
+}
+
+enum SubscriptionPlan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum SubStatus {
+  ACTIVE
+  PAST_DUE
+  GRACE_PERIOD
+  CANCELLED
+  SUSPENDED
+}
+
+// ─────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────
+
+model Tenant {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  logoUrl       String?
+  hmacSecret    String?  // AES-256-GCM encrypted per-tenant HMAC secret
+  isActive      Boolean  @default(false)
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  branches     Branch[]
+  employees    User[]
+  subscription Subscription?
+  auditLogs    AuditLog[]
+
+  @@index([email])
+}
+
+model Branch {
+  id                         String   @id @default(cuid())
+  tenantId                   String
+  name                       String
+  address                    String
+  timezone                   String   @default("UTC")
+  currency                   String   @default("USD")
+  language                   String   @default("en")
+  isActive                   Boolean  @default(true)
+  escalationThresholdMinutes Int      @default(5)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locations Location[]
+  employees User[]
+  menu      Menu?
+  catalogs  ServiceCatalog[]
+  requests  Request[]
+  auditLogs AuditLog[]
+
+  @@index([tenantId])
+}
+
+model Location {
+  id           String         @id @default(cuid())
+  branchId     String
+  name         String
+  locationType LocationType
+  floor        String?
+  zone         String?
+  status       LocationStatus @default(AVAILABLE)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  branch   Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  qrCodes  QrCode[]
+  requests Request[]
+
+  @@index([branchId])
+  @@index([branchId, locationType])
+}
+
+model QrCode {
+  id             String     @id @default(cuid())
+  locationId     String
+  token          String     @unique
+  pngUrl         String
+  svgUrl         String
+  validityPeriod QrValidity @default(NON_EXPIRING)
+  expiresAt      DateTime?
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId])
+  @@index([token])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  branchId     String?
+  email        String    @unique
+  passwordHash String?
+  googleId     String?   @unique
+  role         UserRole
+  firstName    String
+  lastName     String
+  deviceTokens String[]
+  isClockedIn  Boolean   @default(false)
+  isActive     Boolean   @default(true)
+  lockedUntil  DateTime?
+  failedLogins Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch           Branch?        @relation(fields: [branchId], references: [id])
+  assignedRequests Request[]
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([email])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Request {
+  id           String        @id @default(cuid())
+  tenantId     String
+  branchId     String
+  locationId   String
+  sourceType   SourceType
+  serviceType  ServiceType
+  status       RequestStatus @default(PENDING)
+  payload      Json
+  metadata     Json?
+  notes        String?
+  assignedToId String?
+  assignedAt   DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  branch     Branch       @relation(fields: [branchId], references: [id])
+  location   Location     @relation(fields: [locationId], references: [id])
+  assignedTo User?        @relation(fields: [assignedToId], references: [id])
+  items      RequestItem[]
+  feedback   Feedback?
+  auditLogs  AuditLog[]
+
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([locationId])
+  @@index([status])
+  @@index([tenantId, status])
+  @@index([branchId, status])
+  @@index([locationId, serviceType, status])
+  @@index([createdAt])
+}
+
+model RequestItem {
+  id         String  @id @default(cuid())
+  requestId  String
+  menuItemId String
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10, 2)
+  notes      String?
+
+  request  Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([requestId])
+  @@index([menuItemId])
+}
+
+model Menu {
+  id        String   @id @default(cuid())
+  branchId  String   @unique
+  name      String   @default("Main Menu")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch    Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  menuItems MenuItem[]
+
+  @@index([branchId])
+}
+
+model MenuItem {
+  id           String           @id @default(cuid())
+  branchId     String
+  menuId       String
+  name         String
+  description  String?
+  category     MenuItemCategory
+  price        Decimal          @db.Decimal(10, 2)
+  imageUrl     String?
+  status       MenuItemStatus   @default(AVAILABLE)
+  stockQty     Int?
+  displayOrder Int              @default(0)
+  sectionName  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  menu         Menu          @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  requestItems RequestItem[]
+
+  @@index([branchId])
+  @@index([menuId])
+  @@index([status])
+  @@index([category])
+}
+
+model ServiceCatalog {
+  id           String       @id @default(cuid())
+  branchId     String
+  locationType LocationType
+  isPublished  Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  branch   Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  services Service[]
+
+  @@unique([branchId, locationType])
+  @@index([branchId])
+}
+
+model Service {
+  id           String      @id @default(cuid())
+  catalogId    String
+  name         String
+  category     ServiceType
+  displayOrder Int         @default(0)
+  isActive     Boolean     @default(true)
+
+  catalog ServiceCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+
+  @@index([catalogId])
+}
+
+model Subscription {
+  id               String           @id @default(cuid())
+  tenantId         String           @unique
+  plan             SubscriptionPlan
+  status           SubStatus        @default(ACTIVE)
+  stripeSubId      String?
+  flwSubId         String?
+  currentPeriodEnd DateTime
+  gracePeriodEnd   DateTime?
+  maxBranches      Int
+  maxLocations     Int
+  maxEmployees     Int
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  amount         Decimal  @db.Decimal(10, 2)
+  currency       String   @default("USD")
+  status         String   // paid, unpaid, void
+  stripeInvoiceId String?
+  flwTransactionId String?
+  pdfUrl         String?
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+}
+
+model Feedback {
+  id         String   @id @default(cuid())
+  requestId  String   @unique
+  locationId String
+  branchId   String
+  employeeId String?
+  rating     Int
+  comment    String?
+  isReviewed Boolean  @default(false)
+  reviewNote String?
+  createdAt  DateTime @default(now())
+
+  request Request @relation(fields: [requestId], references: [id])
+
+  @@index([branchId])
+  @@index([locationId])
+  @@index([rating])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  tenantId   String?
+  branchId   String?
+  actorId    String?
+  actorRole  UserRole?
+  actionType String
+  entityType String
+  entityId   String
+  ipAddress  String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+
+  // Relations to satisfy model-level back-references
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
+  actor  User?   @relation(fields: [actorId], references: [id])
+  request Request? @relation(fields: [entityId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+  @@index([branchId, createdAt])
+  @@index([actorId])
+}

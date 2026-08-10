@@ -1,0 +1,19 @@
+﻿src/auth/auth.service.ts(377,47): error TS2353: Object literal may only specify known properties, and 'emailVerified' does not exist in type '((Without<UserUpdateInput, UserUncheckedUpdateInput> & UserUncheckedUpdateInput) | (Without<...> & UserUpdateInput)) & object'.
+src/auth/auth.service.ts(395,17): error TS2353: Object literal may only specify known properties, and 'emailVerified' does not exist in type '(((Without<UserCreateWithoutTenantInput, UserUncheckedCreateWithoutTenantInput> & UserUncheckedCreateWithoutTenantInput) | (Without<...> & UserCreateWithoutTenantInput)) & object) | UserCreateWithoutTenantInput[] | UserUncheckedCreateWithoutTenantInput[]'.
+src/auth/auth.service.ts(402,9): error TS2740: Type 'Record<string, unknown>' is missing the following properties from type '{ id: string; email: string; googleId: string | null; tenantId: string; branchId: string | null; passwordHash: string | null; role: UserRole; firstName: string; lastName: string; ... 6 more ...; updatedAt: Date; }': id, email, googleId, tenantId, and 12 more.
+src/auth/auth.service.ts(402,17): error TS2352: Conversion of type '{ id: string; email: string; isActive: boolean; createdAt: Date; updatedAt: Date; name: string; logoUrl: string | null; hmacSecret: string | null; emailVerified: boolean; }' to type '{ employees: Record<string, unknown>[]; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'employees' is missing in type '{ id: string; email: string; isActive: boolean; createdAt: Date; updatedAt: Date; name: string; logoUrl: string | null; hmacSecret: string | null; emailVerified: boolean; }' but required in type '{ employees: Record<string, unknown>[]; }'.
+src/auth/auth.service.ts(410,14): error TS18047: 'user' is possibly 'null'.
+src/auth/auth.service.ts(411,19): error TS18047: 'user' is possibly 'null'.
+src/auth/auth.service.ts(412,15): error TS18047: 'user' is possibly 'null'.
+src/auth/auth.service.ts(413,16): error TS18047: 'user' is possibly 'null'.
+src/auth/auth.service.ts(424,28): error TS18047: 'user' is possibly 'null'.
+src/auth/auth.service.ts(431,17): error TS18047: 'user' is possibly 'null'.
+src/requests/requests.service.ts(43,9): error TS2322: Type 'Record<string, unknown>' is not assignable to type 'JsonNull | InputJsonValue'.
+  Type 'Record<string, unknown>' is missing the following properties from type 'readonly (InputJsonValue | null)[]': length, concat, join, slice, and 20 more.
+src/requests/requests.service.ts(44,9): error TS2322: Type 'Record<string, unknown> | null' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+  Type 'null' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+src/tenants/tenants.service.ts(92,20): error TS2353: Object literal may only specify known properties, and 'branchId' does not exist in type 'QrCodeWhereInput'.
+src/tenants/tenants.service.ts(102,9): error TS2322: Type '{ tenantId: string; status: "SUSPENDED"; plan: "STARTER"; }' is not assignable to type '((Without<SubscriptionCreateInput, SubscriptionUncheckedCreateInput> & SubscriptionUncheckedCreateInput) | (Without<...> & SubscriptionCreateInput)) & object'.
+  Type '{ tenantId: string; status: "SUSPENDED"; plan: "STARTER"; }' is not assignable to type 'Without<SubscriptionCreateInput, SubscriptionUncheckedCreateInput> & SubscriptionUncheckedCreateInput & object'.
+    Type '{ tenantId: string; status: "SUSPENDED"; plan: "STARTER"; }' is missing the following properties from type 'SubscriptionUncheckedCreateInput': currentPeriodEnd, maxBranches, maxLocations, maxEmployees

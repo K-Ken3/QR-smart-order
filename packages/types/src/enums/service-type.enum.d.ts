@@ -1,0 +1,9 @@
+export declare enum ServiceType {
+    FOOD_AND_BEVERAGE = "FOOD_AND_BEVERAGE",
+    HOUSEKEEPING = "HOUSEKEEPING",
+    WAITER_CALL = "WAITER_CALL",
+    MAINTENANCE = "MAINTENANCE",
+    AMENITY_REQUEST = "AMENITY_REQUEST",
+    CUSTOM = "CUSTOM"
+}
+//# sourceMappingURL=service-type.enum.d.ts.map

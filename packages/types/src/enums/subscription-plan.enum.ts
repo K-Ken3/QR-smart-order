@@ -1,0 +1,5 @@
+export enum SubscriptionPlan {
+  STARTER = 'STARTER',
+  PROFESSIONAL = 'PROFESSIONAL',
+  ENTERPRISE = 'ENTERPRISE',
+}

@@ -1,0 +1,106 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SmartServe QR — Local Development Stack
+#
+# Usage:
+#   docker-compose up          → starts postgres + redis (databases only)
+#   docker-compose up --build  → builds and runs the full stack
+#
+# For day-to-day dev, just run the databases here and run the apps locally:
+#   docker-compose up postgres redis
+#   pnpm dev  (from project root)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartserve-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartserve_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smartserve_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: smartserve-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Backend (NestJS) ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: smartserve-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/smartserve_dev?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-jwt-secret-at-least-32-characters}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-secret-at-least-32-chars}
+      QR_HMAC_ENCRYPTION_KEY: ${QR_HMAC_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Frontend (Next.js) ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: smartserve-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://backend:3001
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  redisdata:

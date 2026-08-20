@@ -28,6 +28,7 @@ RUN cd apps/backend && ls dist/main.js
 FROM node:20-alpine AS production
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+RUN npm install -g prisma@7.9.1
 
 RUN addgroup -S smartserve && adduser -S smartserve -G smartserve
 
@@ -50,4 +51,4 @@ WORKDIR /app/apps/backend
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "../../node_modules/.bin/prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "prisma migrate deploy && node dist/main.js"]

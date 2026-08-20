@@ -27,7 +27,8 @@ RUN pnpm --filter @smartserve/types build
 RUN cd apps/backend && pnpm db:generate
 
 # Build the backend with tsc
-RUN cd apps/backend && npx tsc -p tsconfig.build.json
+RUN cd apps/backend && ../../node_modules/.bin/tsc -p tsconfig.build.json
+RUN cd apps/backend && ls dist/main.js
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Production image

@@ -505,9 +505,11 @@ export class AuthService {
 
       // 4. Delete all rt:{userId}:* keys from Redis
       const redisClient = this.redis.getClient();
-      const keys = await redisClient.keys(`rt:${userId}:*`);
-      if (keys.length > 0) {
-        await redisClient.del(...keys);
+      if (redisClient) {
+        const keys = await redisClient.keys(`rt:${userId}:*`);
+        if (keys.length > 0) {
+          await redisClient.del(...keys);
+        }
       }
     }
   }

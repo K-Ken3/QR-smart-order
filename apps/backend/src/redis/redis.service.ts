@@ -1,118 +1,140 @@
-import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import { REDIS_CLIENT, REDIS_SUBSCRIBER } from './redis.constants';
 
 @Injectable()
 export class RedisService implements OnModuleDestroy {
-  constructor(
-    @Inject(REDIS_CLIENT) private readonly client: Redis,
-    @Inject(REDIS_SUBSCRIBER) private readonly subscriber: Redis,
-  ) {}
+  private readonly logger = new Logger('RedisService');
+  private readonly available: boolean;
 
-  /**
-   * Store a value. Optionally set a TTL in seconds.
-   * Values are JSON-serialized before storage.
-   */
-  async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
-    const serialized = JSON.stringify(value);
-    if (ttlSeconds !== undefined && ttlSeconds > 0) {
-      await this.client.setex(key, ttlSeconds, serialized);
-    } else {
-      await this.client.set(key, serialized);
+  constructor(
+    @Inject(REDIS_CLIENT) private readonly client: Redis | null,
+    @Inject(REDIS_SUBSCRIBER) private readonly subscriber: Redis | null,
+  ) {
+    this.available = this.client !== null && this.subscriber !== null;
+    if (!this.available) {
+      this.logger.warn('Redis not configured — caching/pub-sub disabled');
     }
   }
 
-  /**
-   * Retrieve a value by key and JSON-deserialize it.
-   * Returns null if the key does not exist.
-   */
+  isAvailable(): boolean {
+    return this.available;
+  }
+
+  async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
+    if (!this.available) return;
+    try {
+      const serialized = JSON.stringify(value);
+      if (ttlSeconds !== undefined && ttlSeconds > 0) {
+        await this.client!.setex(key, ttlSeconds, serialized);
+      } else {
+        await this.client!.set(key, serialized);
+      }
+    } catch (err) {
+      this.logger.warn(`Redis SET failed: ${(err as Error).message}`);
+    }
+  }
+
   async get<T = unknown>(key: string): Promise<T | null> {
-    const raw = await this.client.get(key);
-    if (raw === null) return null;
-    return JSON.parse(raw) as T;
+    if (!this.available) return null;
+    try {
+      const raw = await this.client!.get(key);
+      if (raw === null) return null;
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
   }
 
-  /**
-   * Delete a key.
-   */
   async del(key: string): Promise<void> {
-    await this.client.del(key);
+    if (!this.available) return;
+    try {
+      await this.client!.del(key);
+    } catch {
+      /* no-op */
+    }
   }
 
-  /**
-   * Check whether a key exists.
-   */
   async exists(key: string): Promise<boolean> {
-    const count = await this.client.exists(key);
-    return count > 0;
+    if (!this.available) return false;
+    try {
+      const count = await this.client!.exists(key);
+      return count > 0;
+    } catch {
+      return false;
+    }
   }
 
-  /**
-   * Store a value with an explicit TTL in seconds.
-   * Convenience alias that mirrors the Redis SETEX command signature.
-   */
   async setex(key: string, seconds: number, value: unknown): Promise<void> {
-    const serialized = JSON.stringify(value);
-    await this.client.setex(key, seconds, serialized);
+    if (!this.available) return;
+    try {
+      const serialized = JSON.stringify(value);
+      await this.client!.setex(key, seconds, serialized);
+    } catch (err) {
+      this.logger.warn(`Redis SETEX failed: ${(err as Error).message}`);
+    }
   }
 
-  /**
-   * Publish a message to a Redis channel.
-   * The data is JSON-serialized before publishing.
-   * Returns the number of subscribers that received the message.
-   */
   async publish(channel: string, data: unknown): Promise<number> {
-    const serialized = JSON.stringify(data);
-    return this.client.publish(channel, serialized);
+    if (!this.available) return 0;
+    try {
+      const serialized = JSON.stringify(data);
+      return await this.client!.publish(channel, serialized);
+    } catch {
+      return 0;
+    }
   }
 
-  /**
-   * Subscribe to a Redis channel and handle incoming messages.
-   * Uses the dedicated subscriber client (ioredis requires a separate
-   * connection for subscribe operations).
-   */
   async subscribe(
     channel: string,
     handler: (data: unknown) => void,
   ): Promise<void> {
-    await this.subscriber.subscribe(channel);
-
-    this.subscriber.on('message', (receivedChannel: string, message: string) => {
-      if (receivedChannel === channel) {
-        try {
-          const data = JSON.parse(message);
-          handler(data);
-        } catch {
-          // Pass the raw string if JSON parsing fails
-          handler(message);
+    if (!this.available) return;
+    try {
+      await this.subscriber!.subscribe(channel);
+      this.subscriber!.on('message', (receivedChannel: string, message: string) => {
+        if (receivedChannel === channel) {
+          try {
+            const data = JSON.parse(message);
+            handler(data);
+          } catch {
+            handler(message);
+          }
         }
-      }
-    });
+      });
+    } catch (err) {
+      this.logger.warn(`Redis SUBSCRIBE failed: ${(err as Error).message}`);
+    }
   }
 
-  /**
-   * Unsubscribe from a Redis channel.
-   */
   async unsubscribe(channel: string): Promise<void> {
-    await this.subscriber.unsubscribe(channel);
+    if (!this.available) return;
+    try {
+      await this.subscriber!.unsubscribe(channel);
+    } catch {
+      /* no-op */
+    }
   }
 
-  /**
-   * Expose the raw publisher client for advanced operations.
-   */
-  getClient(): Redis {
+  getClient(): Redis | null {
     return this.client;
   }
 
-  /**
-   * Expose the raw subscriber client for advanced operations.
-   */
-  getSubscriber(): Redis {
+  getSubscriber(): Redis | null {
     return this.subscriber;
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.client.quit();
-    await this.subscriber.quit();
+    if (!this.available) return;
+    try {
+      await this.client!.quit();
+    } catch {
+      this.client!.disconnect();
+    }
+    try {
+      await this.subscriber!.quit();
+    } catch {
+      this.subscriber!.disconnect();
+    }
   }
 }

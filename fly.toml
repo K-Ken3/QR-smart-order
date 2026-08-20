@@ -1,0 +1,31 @@
+# fly.toml app configuration file generated for smartserve-api on 2026-08-20T14:33:59+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'smartserve-api'
+primary_region = 'jnb'
+
+[build]
+[env]
+  FLW_CURRENCY = 'RWF'
+  FLW_WEBHOOK_HASH = ''
+  NODE_ENV = 'production'
+  PORT = '3001'
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 50
+    soft_limit = 25
+
+[[vm]]
+  memory = '512mb'
+  cpus = 1
+  memory_mb = 512

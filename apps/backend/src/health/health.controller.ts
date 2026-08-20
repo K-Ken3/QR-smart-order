@@ -9,8 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { Public } from '../common/decorators/public.decorator';
 
-/** Per-check sub-deadline (ms). Must be < 200 ms overall budget. */
-const CHECK_TIMEOUT_MS = 150;
+/** Per-check sub-deadline (ms). Neon cold starts can take 2-5 s. */
+const CHECK_TIMEOUT_MS = 5000;
 
 interface CheckResult {
   status: 'up' | 'down';
@@ -77,8 +77,10 @@ export class HealthController {
       this.checkRedis(),
     ]);
 
-    const allUp = dbResult.status === 'up' && redisResult.status === 'up';
-    const overallStatus: HealthResponse['status'] = allUp ? 'ok' : 'error';
+    const dbUp = dbResult.status === 'up';
+    const redisUp = redisResult.status === 'up';
+    const overallStatus: HealthResponse['status'] =
+      dbUp && redisUp ? 'ok' : dbUp ? 'degraded' : 'error';
 
     const response: HealthResponse = {
       status: overallStatus,
@@ -90,9 +92,7 @@ export class HealthController {
       timestamp: new Date().toISOString(),
     };
 
-    if (!allUp) {
-      // Throw an HttpException that carries the raw health payload so the
-      // consumer always gets the same structured shape regardless of HTTP status.
+    if (!dbUp) {
       throw new HttpException(response, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
@@ -120,10 +120,13 @@ export class HealthController {
   }
 
   private async checkRedis(): Promise<CheckResult> {
+    if (!this.redis.isAvailable()) {
+      return { status: 'down', responseTimeMs: 0, error: 'Redis not configured' };
+    }
     const start = Date.now();
     try {
       await withTimeout(
-        this.redis.getClient().ping(),
+        this.redis.getClient()!.ping(),
         CHECK_TIMEOUT_MS,
       );
       return { status: 'up', responseTimeMs: Date.now() - start };

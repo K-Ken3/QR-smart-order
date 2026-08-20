@@ -149,27 +149,40 @@ export class BillingService {
     const amount = plan.priceMonthly;
     const currency = this.config.get<string>('FLW_CURRENCY') ?? 'RWF';
 
-    const Flutterwave = (await import('flutterwave-node-v3')).default;
-    const flw = new Flutterwave('unused', flwSecretKey);
-
-    const response = await flw.Charge.create({
-      tx_ref: txRef,
-      amount: amount.toString(),
-      currency,
-      redirect_url: `${frontendUrl}/billing?tx_ref=${txRef}`,
-      customer: {
-        email: (tenant as any).email,
-        name: (tenant as any).name,
-      },
-      customizations: {
-        title: 'SmartServe QR',
-        description: `Subscription — ${plan.name} ($${plan.priceMonthly}/mo)`,
-      },
-      meta: [{ tenantId, planName }],
-    });
+    let response: any;
+    try {
+      this.logger.log(`Calling Flutterwave API: tx_ref=${txRef}, amount=${amount}, currency=${currency}`);
+      const res = await fetch('https://api.flutterwave.com/v3/payments', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${flwSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tx_ref: txRef,
+          amount,
+          currency,
+          redirect_url: `${frontendUrl}/billing?tx_ref=${txRef}`,
+          customer: {
+            email: (tenant as any).email,
+            name: (tenant as any).name,
+          },
+          customizations: {
+            title: 'SmartServe QR',
+            description: `Subscription — ${plan.name} ($${plan.priceMonthly}/mo)`,
+          },
+          meta: [{ tenantId, planName }],
+        }),
+      });
+      response = await res.json();
+      this.logger.log(`Flutterwave response: status=${response?.status}, link=${response?.data?.link}`);
+    } catch (err) {
+      this.logger.error(`Flutterwave API failed: ${err}`);
+      throw new UnprocessableEntityException(`Payment provider error: ${err}`);
+    }
 
     if (response.status !== 'success') {
-      throw new UnprocessableEntityException('Failed to create payment link');
+      throw new UnprocessableEntityException(response.message ?? 'Failed to create payment link');
     }
 
     // Store the pending transaction reference
@@ -200,12 +213,21 @@ export class BillingService {
       throw new UnprocessableEntityException('Flutterwave is not configured');
     }
 
-    const Flutterwave = (await import('flutterwave-node-v3')).default;
-    const flw = new Flutterwave('unused', flwSecretKey);
+    let response: any;
+    try {
+      const res = await fetch(`https://api.flutterwave.com/v3/transactions/${transactionId}/verify`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${flwSecretKey}`,
+        },
+      });
+      response = await res.json();
+    } catch (err) {
+      this.logger.error(`Flutterwave verify failed: ${err}`);
+      throw new UnprocessableEntityException(`Payment verification error: ${err}`);
+    }
 
-    const response = await flw.Transaction.verify({ id: transactionId });
-
-    if (response.data.status === 'successful') {
+    if (response.data?.status === 'successful') {
       // Find the pending subscription to get the plan name
       // @ts-ignore
       const subscription = await this.prisma.subscription.findUnique({ where: { tenantId } });

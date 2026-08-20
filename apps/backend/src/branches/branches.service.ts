@@ -29,16 +29,24 @@ export class BranchesService {
       );
     }
 
-    return this.prisma.branch.create({
-      data: {
-        tenantId,
-        name: dto.name,
-        address: dto.address,
-        timezone: dto.timezone ?? 'UTC',
-        currency: dto.currency ?? 'USD',
-        language: dto.language ?? 'en',
-        escalationThresholdMinutes: dto.escalationThresholdMinutes ?? 5,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const branch = await tx.branch.create({
+        data: {
+          tenantId,
+          name: dto.name,
+          address: dto.address,
+          timezone: dto.timezone ?? 'UTC',
+          currency: dto.currency ?? 'USD',
+          language: dto.language ?? 'en',
+          escalationThresholdMinutes: dto.escalationThresholdMinutes ?? 5,
+        },
+      });
+
+      await tx.menu.create({
+        data: { branchId: branch.id, name: 'Main Menu' },
+      });
+
+      return branch;
     });
   }
 

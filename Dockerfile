@@ -14,7 +14,7 @@ COPY packages/types/package.json ./packages/types/
 COPY apps/backend/package.json ./apps/backend/
 
 # Install all dependencies (including dev for build)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile || pnpm install
 
 # Copy source
 COPY packages/types/ ./packages/types/

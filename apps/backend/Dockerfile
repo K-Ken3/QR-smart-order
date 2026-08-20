@@ -49,9 +49,10 @@ COPY apps/backend/package.json ./apps/backend/
 # Install production deps (prisma is now a production dep)
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy built output and Prisma schema
+# Copy built output and Prisma config
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+COPY --from=builder /app/apps/backend/prisma.config.js ./apps/backend/prisma.config.js
 
 # Copy shared types build
 COPY --from=builder /app/packages/types/dist ./packages/types/dist

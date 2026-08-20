@@ -2,20 +2,11 @@ services:
   # ─────────────────────────────────────────────────────────────────────
   # PostgreSQL Database
   # ─────────────────────────────────────────────────────────────────────
-  - type: pgsql
+  - type: postgresql
     name: smartserve-db
     plan: free
     databaseName: smartserve
     ipAllowList: []
-
-  # ─────────────────────────────────────────────────────────────────────
-  # Redis
-  # ─────────────────────────────────────────────────────────────────────
-  - type: redis
-    name: smartserve-redis
-    plan: free
-    ipAllowList: []
-    maxmemoryPolicy: allkeys-lru
 
   # ─────────────────────────────────────────────────────────────────────
   # Backend API (NestJS)
@@ -38,10 +29,7 @@ services:
           name: smartserve-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          name: smartserve-redis
-          type: redis
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: QR_HMAC_ENCRYPTION_KEY

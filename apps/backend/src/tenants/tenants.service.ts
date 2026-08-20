@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @Injectable()
@@ -11,12 +13,74 @@ export class TenantsService {
   ) {}
 
   /**
+   * Create a new tenant + business owner account (SUPER_ADMIN only).
+   * The tenant is created as active and email-verified immediately.
+   */
+  async createTenant(dto: CreateTenantDto) {
+    const normalizedEmail = dto.email.toLowerCase().trim();
+
+    // @ts-ignore
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+
+    // @ts-ignore
+    const tenant = await this.prisma.tenant.create({
+      data: {
+        name: dto.businessName,
+        email: normalizedEmail,
+        isActive: true,
+        emailVerified: true,
+        employees: {
+          create: {
+            email: normalizedEmail,
+            passwordHash,
+            role: 'BUSINESS_OWNER',
+            firstName: '',
+            lastName: '',
+          },
+        },
+        subscription: {
+          create: {
+            plan: 'STARTER',
+            status: 'ACTIVE',
+            maxBranches: 1,
+            maxLocations: 10,
+            maxEmployees: 5,
+            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
+        },
+      },
+      include: { employees: true, subscription: true },
+    });
+
+    return {
+      message: 'Business created successfully. The owner should use password reset to set their password.',
+      tenant: { id: tenant.id, name: tenant.name, email: tenant.email },
+    };
+  }
+
+  /**
    * Retrieve the tenant record for a given tenantId.
    * Throws NotFoundException when no matching tenant exists.
    */
   async getMyTenant(tenantId: string) {
     // @ts-ignore
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        logoUrl: true,
+        isActive: true,
+        emailVerified: true,
+        createdAt: true,
+      },
+    });
     if (!tenant) {
       throw new NotFoundException(`Tenant with id "${tenantId}" not found`);
     }
@@ -50,7 +114,13 @@ export class TenantsService {
   async getAllTenants() {
     // @ts-ignore
     return this.prisma.tenant.findMany({
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        isActive: true,
+        emailVerified: true,
+        createdAt: true,
         subscription: true,
         _count: {
           select: { branches: true },
@@ -129,5 +199,33 @@ export class TenantsService {
     });
 
     return { message: 'Tenant suspended' };
+  }
+
+  /**
+   * Delete all data from the database (SUPER_ADMIN only).
+   * Clears tables in FK-safe order inside a transaction.
+   */
+  async clearAllData(): Promise<{ message: string }> {
+    // @ts-ignore
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshToken.deleteMany();
+      await tx.requestItem.deleteMany();
+      await tx.request.deleteMany();
+      await tx.feedback.deleteMany();
+      await tx.auditLog.deleteMany();
+      await tx.qrCode.deleteMany();
+      await tx.location.deleteMany();
+      await tx.menuItem.deleteMany();
+      await tx.menu.deleteMany();
+      await tx.service.deleteMany();
+      await tx.serviceCatalog.deleteMany();
+      await tx.invoice.deleteMany();
+      await tx.branch.deleteMany();
+      await tx.subscription.deleteMany();
+      await tx.user.deleteMany();
+      await tx.tenant.deleteMany();
+    });
+
+    return { message: 'All data cleared successfully' };
   }
 }

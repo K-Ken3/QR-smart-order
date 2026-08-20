@@ -55,9 +55,9 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   async register(
     @Body() dto: RegisterDto,
-  ): Promise<{ success: true; message: string; otp?: string }> {
+  ): Promise<{ success: true; message: string }> {
     const result = await this.authService.register(dto);
-    return { success: true, message: result.message, otp: result.otp };
+    return { success: true, message: result.message };
   }
 
   /**
@@ -83,9 +83,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resendOtp(
     @Body('email') email: string,
-  ): Promise<{ success: true; message: string; otp?: string }> {
+  ): Promise<{ success: true; message: string }> {
     const result = await this.authService.resendOtp(email);
-    return { success: true, message: result.message, otp: result.otp };
+    return { success: true, message: result.message };
   }
 
   /**
@@ -189,6 +189,34 @@ export class AuthController {
     res.redirect(
       `${frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`,
     );
+  }
+
+  /**
+   * POST /auth/forgot-password
+   * Sends a reset code to the user's email (or returns it in dev mode).
+   */
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(
+    @Body('email') email: string,
+  ): Promise<{ success: true; message: string }> {
+    const result = await this.authService.forgotPassword(email);
+    return { success: true, message: result.message };
+  }
+
+  /**
+   * POST /auth/reset-password
+   * Verifies the OTP and sets a new password.
+   */
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body() body: { email: string; otpCode: string; newPassword: string },
+  ): Promise<{ success: true; message: string }> {
+    const result = await this.authService.resetPassword(body.email, body.otpCode, body.newPassword);
+    return { success: true, message: result.message };
   }
 
   /**

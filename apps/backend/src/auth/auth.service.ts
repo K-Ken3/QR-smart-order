@@ -56,8 +56,8 @@ export class AuthService {
     // 2. Hash password
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
-    // 3. Generate 6-digit OTP (valid for 10 minutes)
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // 3. Generate 6-digit OTP (valid for 10 minutes) using cryptographically secure RNG
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     // 4. Create Tenant + User in a transaction
@@ -105,7 +105,7 @@ export class AuthService {
       update: {},
     });
 
-    // 6. Send OTP via email or return it directly (dev mode)
+    // 6. Send OTP via email (production) or log it (dev only — never return in response)
     const smtpHost = this.config.get<string>('SMTP_HOST');
     const smtpUser = this.config.get<string>('SMTP_USER');
     const smtpPass = this.config.get<string>('SMTP_PASS');
@@ -121,11 +121,10 @@ export class AuthService {
       return { message: 'Registration successful. Please check your email for the verification code.' };
     }
 
-    // Dev mode: return OTP directly
-    this.logger.log(`OTP for ${normalizedEmail}: ${otpCode}`);
+    // Dev mode: log OTP only — never return it in the HTTP response
+    this.logger.log(`[DEV] OTP for ${normalizedEmail}: ${otpCode}`);
     return {
-      message: 'Registration successful. Please verify your email with the OTP code.',
-      otp: otpCode,
+      message: 'Registration successful. Please verify your email with the code sent.',
     };
   }
 
@@ -555,7 +554,7 @@ export class AuthService {
     return { message: 'Email verified successfully. Your account is now active.' };
   }
 
-  async resendOtp(email: string): Promise<{ message: string; otp?: string }> {
+  async resendOtp(email: string): Promise<{ message: string }> {
     const normalizedEmail = email.toLowerCase().trim();
 
     // @ts-ignore
@@ -571,7 +570,7 @@ export class AuthService {
       return { message: 'Email already verified' };
     }
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     // @ts-ignore
@@ -593,16 +592,132 @@ export class AuthService {
       return { message: 'A new verification code has been sent to your email.' };
     }
 
-    this.logger.log(`OTP for ${normalizedEmail}: ${otpCode}`);
-    return {
-      message: 'A new verification code has been generated.',
-      otp: otpCode,
-    };
+    this.logger.log(`[DEV] Resend OTP for ${normalizedEmail}: ${otpCode}`);
+    return { message: 'A new verification code has been generated. Check server logs.' };
   }
 
   // ─────────────────────────────────────────────
   // Send OTP Email
   // ─────────────────────────────────────────────
+
+  // ─────────────────────────────────────────────
+  // Forgot Password
+  // ─────────────────────────────────────────────
+
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // @ts-ignore
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      // Don't reveal whether the email exists
+      return { message: 'If an account with that email exists, a reset code has been sent.' };
+    }
+
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Store OTP on the user's tenant (same field reused for password reset)
+    // @ts-ignore
+    await this.prisma.tenant.update({
+      where: { id: user.tenantId as string },
+      data: { otpCode, otpExpiry },
+    });
+
+    const smtpHost = this.config.get<string>('SMTP_HOST');
+    const smtpUser = this.config.get<string>('SMTP_USER');
+    const smtpPass = this.config.get<string>('SMTP_PASS');
+    const smtpConfigured = !!(smtpHost && smtpUser && smtpPass);
+
+    if (smtpConfigured) {
+      this.sendResetEmail(normalizedEmail, otpCode).catch(
+        (err: unknown) => this.logger.warn(`Reset email failed (non-fatal): ${(err as Error).message}`),
+      );
+      return { message: 'If an account with that email exists, a reset code has been sent.' };
+    }
+
+    this.logger.log(`[DEV] Password reset OTP for ${normalizedEmail}: ${otpCode}`);
+    return { message: 'Reset code generated. Check server logs (dev mode).' };
+  }
+
+  async resetPassword(email: string, otpCode: string, newPassword: string): Promise<{ message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // @ts-ignore
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      throw new NotFoundException('No account found with this email');
+    }
+
+    // @ts-ignore
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: user.tenantId as string },
+    });
+
+    if (!tenant || (tenant as any).otpCode !== otpCode) {
+      throw new UnauthorizedException('Invalid reset code');
+    }
+
+    if (!(tenant as any).otpExpiry || new Date((tenant as any).otpExpiry) < new Date()) {
+      throw new UnauthorizedException('Reset code has expired. Please request a new one.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+    // @ts-ignore
+    await this.prisma.user.update({
+      where: { id: user.id as string },
+      data: { passwordHash, failedLogins: 0, lockedUntil: null },
+    });
+
+    // Clear OTP
+    // @ts-ignore
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { otpCode: null, otpExpiry: null },
+    });
+
+    return { message: 'Password reset successfully.' };
+  }
+
+  private async sendResetEmail(email: string, otpCode: string): Promise<void> {
+    const smtpHost = this.config.get<string>('SMTP_HOST');
+    const smtpPort = this.config.get<number>('SMTP_PORT') ?? 587;
+    const smtpUser = this.config.get<string>('SMTP_USER');
+    const smtpPass = this.config.get<string>('SMTP_PASS');
+
+    if (!smtpHost || !smtpUser || !smtpPass) return;
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    await transporter.sendMail({
+      from: `"SmartServe QR" <${smtpUser}>`,
+      to: email,
+      subject: 'Your SmartServe QR Password Reset Code',
+      html: `
+        <h2>Password Reset</h2>
+        <p>Your password reset code is:</p>
+        <div style="font-size:32px;font-weight:bold;letter-spacing:8px;padding:16px;background:#f8f8f8;border-radius:8px;text-align:center;margin:16px 0;">
+          ${otpCode}
+        </div>
+        <p>This code expires in <strong>10 minutes</strong>.</p>
+        <p>If you did not request a password reset, please ignore this email.</p>
+      `,
+    });
+
+    this.logger.log(`Password reset email sent to ${email}`);
+  }
 
   async sendOtpEmail(email: string, otpCode: string): Promise<void> {
     const smtpHost = this.config.get<string>('SMTP_HOST');
@@ -611,7 +726,7 @@ export class AuthService {
     const smtpPass = this.config.get<string>('SMTP_PASS');
 
     if (!smtpHost || !smtpUser || !smtpPass) {
-      this.logger.warn(`OTP for ${email}: ${otpCode}`);
+      this.logger.warn(`[DEV] OTP for ${email}: ${otpCode}`);
       return;
     }
 

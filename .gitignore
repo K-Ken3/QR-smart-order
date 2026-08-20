@@ -50,6 +50,7 @@ coverage/
 
 # Railway
 .railway/
+!railway.toml
 
 # Render
 .render/

@@ -50,4 +50,4 @@ WORKDIR /app/apps/backend
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "echo DATABASE_URL=$DATABASE_URL && node_modules/.bin/prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/main.js"]

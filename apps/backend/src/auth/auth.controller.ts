@@ -19,6 +19,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { Public } from '../common/decorators/public.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -49,8 +50,9 @@ export class AuthController {
   /**
    * POST /auth/register
    * Creates a new Tenant + Business Owner user, sends verification email.
+   * SUPER_ADMIN only — public registration removed.
    */
-  @Public()
+  @Roles('SUPER_ADMIN')
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(

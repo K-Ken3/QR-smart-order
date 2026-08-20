@@ -1,13 +1,16 @@
 const { defineConfig } = require('@prisma/config');
-const dotenv = require('dotenv');
-const path = require('path');
 
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+// Load .env locally; Render injects env vars directly into the process
+if (!process.env.DATABASE_URL) {
+  try {
+    const dotenv = require('dotenv');
+    const path = require('path');
+    dotenv.config({ path: path.resolve(__dirname, '.env') });
+  } catch {}
+}
 
 module.exports = defineConfig({
   datasource: {
-    url:
-      process.env.DATABASE_URL ||
-      'postgresql://postgres:postgres@localhost:5432/smartserve?schema=public',
+    url: process.env.DATABASE_URL,
   },
 });

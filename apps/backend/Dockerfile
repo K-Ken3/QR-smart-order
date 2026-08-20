@@ -41,21 +41,16 @@ RUN addgroup -S smartserve && adduser -S smartserve -G smartserve
 
 WORKDIR /app
 
-# Copy workspace manifests for production install
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
-COPY packages/types/package.json ./packages/types/
-COPY apps/backend/package.json ./apps/backend/
-
-# Production deps with shamefully-hoist so Prisma CLI can find @prisma/config
-RUN pnpm install --frozen-lockfile --prod --shamefully-hoist
-
-# Copy built output and Prisma config
+# Copy everything from builder — node_modules, source, build output
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
 COPY --from=builder /app/apps/backend/prisma.config.js ./apps/backend/prisma.config.js
-
-# Copy shared types build
-COPY --from=builder /app/packages/types/dist ./packages/types/dist
+COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
+COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 
 RUN chown -R smartserve:smartserve /app
 USER smartserve
@@ -64,5 +59,5 @@ WORKDIR /app/apps/backend
 
 EXPOSE 3001
 
-# Generate Prisma client at runtime, run migrations, then start
-CMD ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && node dist/main.js"]
+# Run migrations then start the app
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

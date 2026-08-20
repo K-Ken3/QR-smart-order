@@ -46,8 +46,8 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/types/package.json ./packages/types/
 COPY apps/backend/package.json ./apps/backend/
 
-# Install production deps (prisma is now a production dep)
-RUN pnpm install --frozen-lockfile --prod
+# Production deps with shamefully-hoist so Prisma CLI can find @prisma/config
+RUN pnpm install --frozen-lockfile --prod --shamefully-hoist
 
 # Copy built output and Prisma config
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist

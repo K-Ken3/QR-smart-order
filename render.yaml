@@ -25,8 +25,10 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: QR_HMAC_ENCRYPTION_KEY
+      - key: JWT_REFRESH_SECRET
         generateValue: true
+      - key: QR_HMAC_ENCRYPTION_KEY
+        value: ecd2d46ae61145447bc611ef4f2ae8dd8fcb36d9c37e40e764dd2fe47202c516
       - key: FLW_SECRET_KEY
         sync: false
       - key: FLW_PUBLIC_KEY

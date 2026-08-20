@@ -1,6 +1,0 @@
-{
-  "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter @smartserve/types build && pnpm --filter @smartserve/frontend build",
-  "outputDirectory": "apps/frontend/.next",
-  "framework": "nextjs"
-}

@@ -26,7 +26,7 @@ RUN pnpm --filter @smartserve/types build
 # Generate Prisma client
 RUN cd apps/backend && pnpm db:generate
 
-# Build the backend with tsc (not nest build — webpack has express resolution issues)
+# Build the backend with tsc
 RUN cd apps/backend && npx tsc -p tsconfig.build.json
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -46,14 +46,12 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/types/package.json ./packages/types/
 COPY apps/backend/package.json ./apps/backend/
 
-# Production deps only
+# Install production deps (prisma is now a production dep)
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy built output and Prisma artifacts
+# Copy built output and Prisma schema
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
-COPY --from=builder /app/node_modules/.pnpm ./node_modules/.pnpm
-COPY --from=builder /app/apps/backend/node_modules/.prisma ./apps/backend/node_modules/.prisma
 
 # Copy shared types build
 COPY --from=builder /app/packages/types/dist ./packages/types/dist
@@ -65,5 +63,5 @@ WORKDIR /app/apps/backend
 
 EXPOSE 3001
 
-# Run migrations then start the app
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# Generate Prisma client at runtime, run migrations, then start
+CMD ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && node dist/main.js"]

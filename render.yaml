@@ -1,16 +1,9 @@
-services:
-  # ─────────────────────────────────────────────────────────────────────
-  # PostgreSQL Database
-  # ─────────────────────────────────────────────────────────────────────
-  - type: postgresql
-    name: smartserve-db
+databases:
+  - name: smartserve-db
     plan: free
     databaseName: smartserve
-    ipAllowList: []
 
-  # ─────────────────────────────────────────────────────────────────────
-  # Backend API (NestJS)
-  # ─────────────────────────────────────────────────────────────────────
+services:
   - type: web
     name: smartserve-api
     runtime: docker

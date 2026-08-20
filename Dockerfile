@@ -34,19 +34,20 @@ RUN addgroup -S smartserve && adduser -S smartserve -G smartserve
 WORKDIR /app
 
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+COPY --from=builder /app/apps/backend/prisma.config.js ./apps/backend/prisma.config.js
 COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/packages/types/package.json ./packages/types/package.json
 
 RUN mkdir -p uploads && chown -R smartserve:smartserve /app
 USER smartserve
 
 WORKDIR /app/apps/backend
 
-EXPOSE ${PORT:-10000}
+EXPOSE 10000
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

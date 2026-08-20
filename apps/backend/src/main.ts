@@ -1,7 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
 import * as rTracer from 'cls-rtracer';
+import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -9,6 +12,7 @@ import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // ──────────────────────────────────────────────
   // 1. HTTPS redirect (production only, must come first)
@@ -71,7 +75,7 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Allow requests with no origin (server-to-server, Postman, etc.)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
@@ -86,6 +90,19 @@ async function bootstrap() {
   // 5. Global API prefix
   // ──────────────────────────────────────────────
   app.setGlobalPrefix('api');
+
+  // ──────────────────────────────────────────────
+  // 5b. Serve uploaded files (must be before prefix applies)
+  // ──────────────────────────────────────────────
+  const uploadsDir = join(process.cwd(), 'uploads');
+  if (!existsSync(uploadsDir)) {
+    mkdirSync(uploadsDir, { recursive: true });
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  expressApp.use('/uploads', (req: any, res: any, next: any) => {
+    const express = require('express');
+    express.static(uploadsDir)(req, res, next);
+  });
 
   // ──────────────────────────────────────────────
   // 6. Global ValidationPipe

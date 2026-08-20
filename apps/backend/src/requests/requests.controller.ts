@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -23,6 +24,23 @@ export class RequestsController {
   @HttpCode(HttpStatus.CREATED)
   createRequest(@Body() dto: CreateRequestDto) {
     return this.requestsService.createRequest(dto);
+  }
+
+  @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'KITCHEN_STAFF')
+  @Get()
+  getRequests(
+    @Query('branchId') branchId?: string,
+    @Query('status') status?: string,
+    @Query('serviceType') serviceType?: string,
+    @Query('locationId') locationId?: string,
+  ) {
+    return this.requestsService.getRequests({ branchId, status, serviceType, locationId });
+  }
+
+  @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'KITCHEN_STAFF')
+  @Get(':id')
+  getRequest(@Param('id') id: string) {
+    return this.requestsService.getRequestById(id);
   }
 
   @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'KITCHEN_STAFF')

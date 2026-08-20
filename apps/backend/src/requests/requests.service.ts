@@ -1,13 +1,28 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateRequestDto, AssignRequestDto, UpdateRequestStatusDto, AddRequestNoteDto } from './requests.dto';
-import { RequestStatus } from '@prisma/client';
 
 const DEDUP_TTL_SECONDS = 60;
 
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  PENDING: ['ASSIGNED', 'CANCELLED'],
+  ASSIGNED: ['IN_PROGRESS', 'CANCELLED'],
+  IN_PROGRESS: ['COMPLETED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
 @Injectable()
 export class RequestsService {
+  private readonly logger = new Logger(RequestsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -44,9 +59,22 @@ export class RequestsService {
         metadata: dto.metadata as any ?? null,
         notes: null,
       },
+      include: {
+        location: { select: { name: true } },
+      },
     });
 
     await this.redis.setex(existingRequestKey, DEDUP_TTL_SECONDS, { requestId: request.id });
+
+    await this.publishEvent('request:created', {
+      requestId: request.id,
+      locationName: request.location.name,
+      serviceType: request.serviceType,
+      status: request.status,
+      createdAt: request.createdAt,
+      branchId: branch.id,
+      tenantId: branch.tenantId,
+    });
 
     return request;
   }
@@ -67,15 +95,35 @@ export class RequestsService {
     if (!employee.branchId || employee.branchId !== request.branchId) {
       throw new UnprocessableEntityException('Employee does not belong to request branch');
     }
+    if (!employee.isActive) {
+      throw new UnprocessableEntityException('Cannot assign to an inactive employee');
+    }
+    if (!employee.isClockedIn) {
+      throw new UnprocessableEntityException('Cannot assign to an employee who is not clocked in');
+    }
 
-    return this.prisma.request.update({
+    const updated = await this.prisma.request.update({
       where: { id },
       data: {
         status: 'ASSIGNED',
         assignedToId: dto.employeeId,
         assignedAt: new Date(),
       },
+      include: {
+        location: { select: { name: true } },
+      },
     });
+
+    await this.publishEvent('request:assigned', {
+      requestId: updated.id,
+      employeeName: `${employee.firstName} ${employee.lastName}`,
+      employeeId: employee.id,
+      status: updated.status,
+      branchId: request.branchId,
+      tenantId: request.tenantId,
+    });
+
+    return updated;
   }
 
   async updateRequestStatus(id: string, dto: UpdateRequestStatusDto) {
@@ -84,27 +132,37 @@ export class RequestsService {
       throw new NotFoundException('Request not found');
     }
 
+    const allowed = VALID_TRANSITIONS[request.status] ?? [];
+    if (!allowed.includes(dto.status)) {
+      throw new UnprocessableEntityException(
+        `Cannot transition from ${request.status} to ${dto.status}`,
+      );
+    }
+
+    const updateData: Record<string, unknown> = { status: dto.status };
+
     if (dto.status === 'IN_PROGRESS') {
-      if (request.status !== 'ASSIGNED') {
-        throw new UnprocessableEntityException('Only assigned requests may transition to IN_PROGRESS');
-      }
-      return this.prisma.request.update({
-        where: { id },
-        data: { status: 'IN_PROGRESS', startedAt: new Date() },
-      });
+      updateData.startedAt = new Date();
+    } else if (dto.status === 'COMPLETED') {
+      updateData.completedAt = new Date();
     }
 
-    if (dto.status === 'COMPLETED') {
-      if (request.status !== 'IN_PROGRESS') {
-        throw new UnprocessableEntityException('Only in-progress requests may transition to COMPLETED');
-      }
-      return this.prisma.request.update({
-        where: { id },
-        data: { status: 'COMPLETED', completedAt: new Date() },
-      });
-    }
+    const updated = await this.prisma.request.update({
+      where: { id },
+      data: updateData,
+    });
 
-    throw new UnprocessableEntityException('Unsupported request status transition');
+    await this.publishEvent('request:status_changed', {
+      requestId: updated.id,
+      oldStatus: request.status,
+      newStatus: dto.status,
+      timestamp: new Date().toISOString(),
+      branchId: request.branchId,
+      tenantId: request.tenantId,
+      locationId: request.locationId,
+    });
+
+    return updated;
   }
 
   async cancelRequest(id: string) {
@@ -116,13 +174,23 @@ export class RequestsService {
       throw new UnprocessableEntityException('Only pending requests may be cancelled');
     }
 
-    return this.prisma.request.update({
+    const updated = await this.prisma.request.update({
       where: { id },
       data: {
         status: 'CANCELLED',
         cancelledAt: new Date(),
       },
     });
+
+    await this.publishEvent('request:cancelled', {
+      requestId: updated.id,
+      cancelledAt: updated.cancelledAt,
+      branchId: request.branchId,
+      tenantId: request.tenantId,
+      locationId: request.locationId,
+    });
+
+    return updated;
   }
 
   async addRequestNote(id: string, dto: AddRequestNoteDto) {
@@ -135,5 +203,50 @@ export class RequestsService {
       where: { id },
       data: { notes: dto.note },
     });
+  }
+
+  async getRequests(filters: {
+    branchId?: string;
+    status?: string;
+    serviceType?: string;
+    locationId?: string;
+  }) {
+    const where: Record<string, unknown> = {};
+    if (filters.branchId) where.branchId = filters.branchId;
+    if (filters.status) where.status = filters.status;
+    if (filters.serviceType) where.serviceType = filters.serviceType;
+    if (filters.locationId) where.locationId = filters.locationId;
+
+    return this.prisma.request.findMany({
+      where,
+      include: {
+        location: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getRequestById(id: string) {
+    const request = await this.prisma.request.findUnique({
+      where: { id },
+      include: {
+        location: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true } },
+        items: true,
+      },
+    });
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    return request;
+  }
+
+  private async publishEvent(event: string, data: Record<string, unknown>) {
+    try {
+      await this.redis.publish(`events:${event}`, { event, ...data });
+    } catch (err) {
+      this.logger.warn(`Failed to publish event ${event}: ${(err as Error).message}`);
+    }
   }
 }

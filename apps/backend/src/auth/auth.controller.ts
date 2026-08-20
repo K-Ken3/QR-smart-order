@@ -6,7 +6,6 @@ import {
   HttpStatus,
   Patch,
   Post,
-  Query,
   Req,
   Res,
   UseGuards,
@@ -56,24 +55,37 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   async register(
     @Body() dto: RegisterDto,
-  ): Promise<{ success: true; message: string }> {
+  ): Promise<{ success: true; message: string; otp?: string }> {
     const result = await this.authService.register(dto);
+    return { success: true, message: result.message, otp: result.otp };
+  }
+
+  /**
+   * POST /auth/verify-otp
+   * Verifies the 6-digit OTP code and activates the tenant account.
+   */
+  @Public()
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(
+    @Body() body: { email: string; otpCode: string },
+  ): Promise<{ success: true; message: string }> {
+    const result = await this.authService.verifyOtp(body.email, body.otpCode);
     return { success: true, message: result.message };
   }
 
   /**
-   * GET /auth/verify?token=
-   * Validates the signed verification link, activates the Tenant, and provisions
-   * the default STARTER subscription.
+   * POST /auth/resend-otp
+   * Generates a new OTP code and sends it to the registered email.
    */
   @Public()
-  @Get('verify')
+  @Post('resend-otp')
   @HttpCode(HttpStatus.OK)
-  async verifyEmail(
-    @Query('token') token: string,
-  ): Promise<{ success: true; message: string }> {
-    const result = await this.authService.verifyEmail(token);
-    return { success: true, message: result.message };
+  async resendOtp(
+    @Body('email') email: string,
+  ): Promise<{ success: true; message: string; otp?: string }> {
+    const result = await this.authService.resendOtp(email);
+    return { success: true, message: result.message, otp: result.otp };
   }
 
   /**

@@ -33,11 +33,14 @@
   "dependencies": {
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^4.0.4",
-    "@nestjs/core": "^10.0.0",
+    "@nestjs/core": "^10.4.22",
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/platform-socket.io": "^10.0.0",
+    "@nestjs/schedule": "^4.0.0",
     "@nestjs/throttler": "^6.5.0",
+    "@nestjs/websockets": "^10.0.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@smartserve/types": "workspace:*",
@@ -46,6 +49,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cls-rtracer": "^2.6.4",
+    "flutterwave-node-v3": "^1.4.1",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "joi": "^18.2.3",
@@ -55,7 +59,8 @@
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

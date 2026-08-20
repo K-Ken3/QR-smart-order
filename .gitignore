@@ -50,3 +50,9 @@ coverage/
 
 # Railway
 .railway/
+
+# Render
+.render/
+
+# Uploads
+uploads/

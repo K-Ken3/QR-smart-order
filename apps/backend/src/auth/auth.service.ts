@@ -39,7 +39,7 @@ export class AuthService {
   // Register
   // ─────────────────────────────────────────────
 
-  async register(dto: RegisterDto): Promise<{ message: string }> {
+  async register(dto: RegisterDto): Promise<{ message: string; verificationUrl?: string; otp?: string }> {
     const normalizedEmail = dto.email.toLowerCase().trim();
 
     // 1. Unique email check
@@ -56,7 +56,11 @@ export class AuthService {
     // 2. Hash password
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
-    // 3. Create Tenant + User in a transaction
+    // 3. Generate 6-digit OTP (valid for 10 minutes)
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    // 4. Create Tenant + User in a transaction
     // @ts-ignore
     const tenant = await this.prisma.tenant.create({
       data: {
@@ -64,6 +68,8 @@ export class AuthService {
         email: normalizedEmail,
         isActive: false,
         emailVerified: false,
+        otpCode,
+        otpExpiry,
         employees: {
             create: {
               email: normalizedEmail,
@@ -82,20 +88,45 @@ export class AuthService {
 
     const user = (tenant as any).employees[0];
 
-    // 4. Build and send verification email (fire-and-forget — never blocks registration)
-    const verificationToken = this.jwtService.sign(
-      { sub: user.id, tenantId: tenant.id, purpose: 'email-verify' },
-      { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '24h' },
-    );
+    // 5. Provision default STARTER subscription immediately
+    const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // @ts-ignore
+    await this.prisma.subscription.upsert({
+      where: { tenantId: tenant.id },
+      create: {
+        tenantId: tenant.id,
+        plan: 'STARTER',
+        status: 'ACTIVE',
+        maxBranches: 1,
+        maxLocations: 10,
+        maxEmployees: 5,
+        currentPeriodEnd,
+      },
+      update: {},
+    });
 
-    this.sendVerificationEmail(normalizedEmail, verificationToken).catch(
-      (err: unknown) =>
-        this.logger.warn(
-          `Verification email failed (non-fatal): ${(err as Error).message}`,
-        ),
-    );
+    // 6. Send OTP via email or return it directly (dev mode)
+    const smtpHost = this.config.get<string>('SMTP_HOST');
+    const smtpUser = this.config.get<string>('SMTP_USER');
+    const smtpPass = this.config.get<string>('SMTP_PASS');
+    const smtpConfigured = !!(smtpHost && smtpUser && smtpPass);
 
-    return { message: 'Verification email sent' };
+    if (smtpConfigured) {
+      this.sendOtpEmail(normalizedEmail, otpCode).catch(
+        (err: unknown) =>
+          this.logger.warn(
+            `OTP email failed (non-fatal): ${(err as Error).message}`,
+          ),
+      );
+      return { message: 'Registration successful. Please check your email for the verification code.' };
+    }
+
+    // Dev mode: return OTP directly
+    this.logger.log(`OTP for ${normalizedEmail}: ${otpCode}`);
+    return {
+      message: 'Registration successful. Please verify your email with the OTP code.',
+      otp: otpCode,
+    };
   }
 
   // ─────────────────────────────────────────────
@@ -482,100 +513,105 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────────
-  // Verify Email
+  // Verify Email (OTP)
   // ─────────────────────────────────────────────
 
-  async verifyEmail(token: string): Promise<{ message: string }> {
-    // 1. Validate the JWT — any error means the link is invalid or expired
-    let payload: { sub: string; tenantId: string; purpose: string };
-    try {
-      payload = this.jwtService.verify<{
-        sub: string;
-        tenantId: string;
-        purpose: string;
-      }>(token, { secret: this.config.get<string>('JWT_SECRET') });
-    } catch {
-      throw new UnauthorizedException('Invalid or expired verification link');
-    }
+  async verifyOtp(email: string, otpCode: string): Promise<{ message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
 
-    // 2. Check the token purpose
-    if (payload.purpose !== 'email-verify') {
-      throw new UnauthorizedException('Invalid or expired verification link');
-    }
-
-    // 3. Find the user
-    // @ts-ignore
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    // 4. Find the tenant
+    // 1. Find tenant by email
     // @ts-ignore
     const tenant = await this.prisma.tenant.findUnique({
-      where: { id: payload.tenantId },
+      where: { email: normalizedEmail },
     });
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found');
+      throw new NotFoundException('No account found with this email');
     }
 
-    // 5. Idempotent — already verified
+    // 2. Idempotent — already verified
     if ((tenant as { emailVerified: boolean }).emailVerified) {
       return { message: 'Email already verified' };
     }
 
-    // 6. Activate the tenant
+    // 3. Check OTP code and expiry
+    if ((tenant as any).otpCode !== otpCode) {
+      throw new UnauthorizedException('Invalid verification code');
+    }
+
+    if (!(tenant as any).otpExpiry || new Date((tenant as any).otpExpiry) < new Date()) {
+      throw new UnauthorizedException('Verification code has expired. Please register again.');
+    }
+
+    // 4. Activate the tenant
     // @ts-ignore
     await this.prisma.tenant.update({
-      where: { id: payload.tenantId },
-      data: { isActive: true, emailVerified: true },
-    });
-
-    // 7. Provision default STARTER subscription (upsert for idempotency)
-    const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    // @ts-ignore
-    await this.prisma.subscription.upsert({
-      where: { tenantId: payload.tenantId },
-      create: {
-        tenantId: payload.tenantId,
-        plan: 'STARTER',
-        status: 'ACTIVE',
-        maxBranches: 1,
-        maxLocations: 10,
-        maxEmployees: 5,
-        currentPeriodEnd,
-      },
-      update: {},
+      where: { id: tenant.id },
+      data: { isActive: true, emailVerified: true, otpCode: null, otpExpiry: null },
     });
 
     return { message: 'Email verified successfully. Your account is now active.' };
   }
 
+  async resendOtp(email: string): Promise<{ message: string; otp?: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // @ts-ignore
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('No account found with this email');
+    }
+
+    if ((tenant as { emailVerified: boolean }).emailVerified) {
+      return { message: 'Email already verified' };
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    // @ts-ignore
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { otpCode, otpExpiry },
+    });
+
+    const smtpHost = this.config.get<string>('SMTP_HOST');
+    const smtpUser = this.config.get<string>('SMTP_USER');
+    const smtpPass = this.config.get<string>('SMTP_PASS');
+    const smtpConfigured = !!(smtpHost && smtpUser && smtpPass);
+
+    if (smtpConfigured) {
+      this.sendOtpEmail(normalizedEmail, otpCode).catch(
+        (err: unknown) =>
+          this.logger.warn(`OTP email failed (non-fatal): ${(err as Error).message}`),
+      );
+      return { message: 'A new verification code has been sent to your email.' };
+    }
+
+    this.logger.log(`OTP for ${normalizedEmail}: ${otpCode}`);
+    return {
+      message: 'A new verification code has been generated.',
+      otp: otpCode,
+    };
+  }
+
   // ─────────────────────────────────────────────
-  // Send Verification Email
+  // Send OTP Email
   // ─────────────────────────────────────────────
 
-  async sendVerificationEmail(email: string, token: string): Promise<void> {
+  async sendOtpEmail(email: string, otpCode: string): Promise<void> {
     const smtpHost = this.config.get<string>('SMTP_HOST');
     const smtpPort = this.config.get<number>('SMTP_PORT') ?? 587;
     const smtpUser = this.config.get<string>('SMTP_USER');
     const smtpPass = this.config.get<string>('SMTP_PASS');
-    const frontendUrl =
-      this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
 
-    // Graceful degradation: skip sending if SMTP is not configured
     if (!smtpHost || !smtpUser || !smtpPass) {
-      this.logger.warn(
-        'SMTP not configured — skipping verification email (dev mode)',
-      );
+      this.logger.warn(`OTP for ${email}: ${otpCode}`);
       return;
     }
-
-    const verificationUrl = `${frontendUrl}/auth/verify?token=${token}`;
 
     const transporter = nodemailer.createTransport({
       host: smtpHost,
@@ -587,18 +623,19 @@ export class AuthService {
     await transporter.sendMail({
       from: `"SmartServe QR" <${smtpUser}>`,
       to: email,
-      subject: 'Verify your SmartServe QR account',
+      subject: 'Your SmartServe QR Verification Code',
       html: `
-        <h2>Welcome to SmartServe QR!</h2>
-        <p>Click the link below to verify your email address. This link expires in 24 hours.</p>
-        <p><a href="${verificationUrl}" style="padding:12px 24px;background:#4F46E5;color:#fff;text-decoration:none;border-radius:6px;">
-          Verify Email
-        </a></p>
-        <p>Or copy this URL into your browser:<br>${verificationUrl}</p>
+        <h2>Verify Your Email</h2>
+        <p>Your verification code is:</p>
+        <div style="font-size:32px;font-weight:bold;letter-spacing:8px;padding:16px;background:#f8f8f8;border-radius:8px;text-align:center;margin:16px 0;">
+          ${otpCode}
+        </div>
+        <p>This code expires in <strong>10 minutes</strong>.</p>
+        <p>If you did not register for SmartServe QR, please ignore this email.</p>
       `,
     });
 
-    this.logger.log(`Verification email sent to ${email}`);
+    this.logger.log(`OTP email sent to ${email}`);
   }
 
   // ─────────────────────────────────────────────

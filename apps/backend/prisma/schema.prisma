@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────
@@ -88,6 +87,7 @@ enum SubscriptionPlan {
 
 enum SubStatus {
   ACTIVE
+  PENDING
   PAST_DUE
   GRACE_PERIOD
   CANCELLED
@@ -106,6 +106,9 @@ model Tenant {
   hmacSecret    String?  // AES-256-GCM encrypted per-tenant HMAC secret
   isActive      Boolean  @default(false)
   emailVerified Boolean  @default(false)
+  otpCode       String?
+  otpExpiry     DateTime?
+  stripeCustomerId String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

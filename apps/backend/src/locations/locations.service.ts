@@ -6,10 +6,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLocationDto, UpdateLocationDto } from './locations.dto';
 import { LocationStatus } from '@prisma/client';
+import { QrService } from '../qr/qr.service';
+import { QrValidity } from '@smartserve/types';
 
 @Injectable()
 export class LocationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly qrService: QrService,
+  ) {}
 
   async createLocation(branchId: string, dto: CreateLocationDto) {
     const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
@@ -30,7 +35,7 @@ export class LocationsService {
       throw new NotFoundException('Default service catalog not found for this location type');
     }
 
-    return this.prisma.location.create({
+    const location = await this.prisma.location.create({
       data: {
         branchId,
         name: dto.name,
@@ -38,6 +43,19 @@ export class LocationsService {
         floor: dto.floor,
         zone: dto.zone,
       },
+    });
+
+    if (dto.locationType === 'DINING_TABLE') {
+      try {
+        await this.qrService.generateQr(location.id, QrValidity.NON_EXPIRING);
+      } catch {
+        // QR generation is best-effort; location creation still succeeds
+      }
+    }
+
+    return this.prisma.location.findUnique({
+      where: { id: location.id },
+      include: { qrCodes: true },
     });
   }
 

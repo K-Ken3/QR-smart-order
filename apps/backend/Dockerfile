@@ -3,8 +3,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /app
 
@@ -26,15 +25,15 @@ RUN pnpm --filter @smartserve/types build
 # Generate Prisma client
 RUN cd apps/backend && pnpm db:generate
 
-# Build the NestJS app
-RUN cd apps/backend && pnpm build
+# Build the backend with tsc (not nest build — webpack has express resolution issues)
+RUN cd apps/backend && npx tsc -p tsconfig.build.json
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Production image
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS production
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Create non-root user
 RUN addgroup -S smartserve && adduser -S smartserve -G smartserve
@@ -66,4 +65,4 @@ WORKDIR /app/apps/backend
 EXPOSE 3001
 
 # Run migrations then start the app
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

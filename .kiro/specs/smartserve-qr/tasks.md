@@ -110,14 +110,14 @@ This plan implements the SmartServe QR platform across 22 phases, progressing fr
 
 ## Phase 3: Tenant, Branch, and Location Management
 
-- [-] 10. Tenant Management Module
+- [x] 10. Tenant Management Module
   - Implement `GET /tenants/me` and `PATCH /tenants/me` (name, logo, contact details)
   - On profile update, emit a WebSocket event so branch-branded guest interfaces refresh within 5 s
   - Implement Super Admin endpoints: `GET /tenants` and `PATCH /tenants/:id/suspend` (deactivate all branches + QR codes within 60 s, guarded by SUPER_ADMIN role)
   - Write unit tests for profile update, suspension propagation, and SUPER_ADMIN guard
   - _Requirements: 1, 12_
 
-- [~] 11. Branch Management Module
+- [ ] 11. Branch Management Module
   - Implement `POST /branches`: create branch under authenticated tenant, enforce Subscription branch quota (422 on exceeded)
   - Implement `GET /branches`, `PATCH /branches/:id`, `DELETE /branches/:id` (deactivate disables all QR codes, returns 503 on guest scan)
   - Support independent config per branch: operating hours, currency, default language, escalation threshold

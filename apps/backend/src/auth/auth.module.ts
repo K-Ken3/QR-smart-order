@@ -7,21 +7,17 @@ import { AuthService } from './auth.service';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
-/**
- * AuthModule
- *
- * Provides local (email/password) and Google OAuth authentication:
- *  - POST /auth/register  — create Tenant + BUSINESS_OWNER, send verification email
- *  - POST /auth/login     — verify credentials, issue JWT + RefreshToken
- *  - POST /auth/logout    — revoke RefreshToken in Redis + DB
- *  - POST /auth/refresh   — rotate refresh token, issue new JWT
- *  - GET  /auth/google    — initiate Google OAuth flow
- *  - GET  /auth/google/callback — handle Google OAuth callback
- *  - PATCH /auth/password — change password, revoke all sessions
- *
- * Both PrismaModule and RedisModule are @Global(), so their services
- * are available here without explicit re-import.
- */
+const googleStrategyProvider = {
+  provide: GoogleStrategy,
+  inject: [AuthService, ConfigService],
+  useFactory: (authService: AuthService, config: ConfigService) => {
+    if (!config.get<string>('GOOGLE_CLIENT_ID')) {
+      return {} as GoogleStrategy;
+    }
+    return new GoogleStrategy(authService, config);
+  },
+};
+
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -34,7 +30,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy],
+  providers: [AuthService, JwtStrategy, googleStrategyProvider],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

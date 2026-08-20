@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -14,14 +15,22 @@ import { RequestsModule } from './requests/requests.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { MenuModule } from './menu/menu.module';
+import { EmployeesModule } from './employees/employees.module';
+import { WebSocketModule } from './websocket/websocket.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { EscalationModule } from './escalation/escalation.module';
+import { AuditModule } from './audit/audit.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { BillingModule } from './billing/billing.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { IoTAuthModule } from './iot-auth/iot-auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 
 @Module({
   imports: [
-    // AppConfigModule must come first — it sets up the global ConfigService
-    // that downstream modules (including RedisModule) depend on.
+    ScheduleModule.forRoot(),
     AppConfigModule,
     PrismaModule,
     RedisModule,
@@ -34,11 +43,19 @@ import { TenantContextInterceptor } from './common/interceptors/tenant-context.i
     MenuModule,
     RequestsModule,
     TenantsModule,
+    EmployeesModule,
+    WebSocketModule,
+    NotificationsModule,
+    EscalationModule,
+    AuditModule,
+    FeedbackModule,
+    BillingModule,
+    AnalyticsModule,
+    IoTAuthModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    // ── Global guards (order matters: JWT auth first, then RBAC roles) ──────
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -47,7 +64,6 @@ import { TenantContextInterceptor } from './common/interceptors/tenant-context.i
       provide: APP_GUARD,
       useClass: RolesGuard,
     },
-    // ── Global tenant-context interceptor (runs after LoggingInterceptor) ───
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantContextInterceptor,

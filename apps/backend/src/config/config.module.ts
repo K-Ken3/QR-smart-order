@@ -29,28 +29,28 @@ import * as Joi from 'joi';
           }),
 
         // Supabase (optional)
-        SUPABASE_URL: Joi.string().uri().optional(),
-        SUPABASE_SERVICE_KEY: Joi.string().optional(),
+        SUPABASE_URL: Joi.string().uri().allow('').optional(),
+        SUPABASE_SERVICE_KEY: Joi.string().allow('').optional(),
 
         // Firebase (optional)
-        FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().optional(),
+        FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').optional(),
 
         // Stripe (optional)
-        STRIPE_SECRET_KEY: Joi.string().optional(),
-        STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
+        STRIPE_SECRET_KEY: Joi.string().allow('').optional(),
+        STRIPE_WEBHOOK_SECRET: Joi.string().allow('').optional(),
 
         // Flutterwave (optional)
-        FLUTTERWAVE_SECRET_KEY: Joi.string().optional(),
+        FLUTTERWAVE_SECRET_KEY: Joi.string().allow('').optional(),
 
         // Google OAuth (optional)
-        GOOGLE_CLIENT_ID: Joi.string().optional(),
-        GOOGLE_CLIENT_SECRET: Joi.string().optional(),
+        GOOGLE_CLIENT_ID: Joi.string().allow('').optional(),
+        GOOGLE_CLIENT_SECRET: Joi.string().allow('').optional(),
 
         // SMTP (all optional)
-        SMTP_HOST: Joi.string().optional(),
+        SMTP_HOST: Joi.string().allow('').optional(),
         SMTP_PORT: Joi.number().integer().optional(),
-        SMTP_USER: Joi.string().optional(),
-        SMTP_PASS: Joi.string().optional(),
+        SMTP_USER: Joi.string().allow('').optional(),
+        SMTP_PASS: Joi.string().allow('').optional(),
 
         // App
         FRONTEND_URL: Joi.string().uri().default('http://localhost:3000'),

@@ -1,5 +1,4 @@
-import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
 import { ServiceType, SourceType } from '@smartserve/types';
 
 export class CreateRequestDto {

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { FeedbackService, SubmitFeedbackDto, ReviewFeedbackDto } from './feedback.service';
 
@@ -6,6 +7,7 @@ import { FeedbackService, SubmitFeedbackDto, ReviewFeedbackDto } from './feedbac
 export class FeedbackController {
   constructor(private readonly feedbackService: FeedbackService) {}
 
+  @Public()
   @Post()
   @HttpCode(HttpStatus.CREATED)
   submitFeedback(@Body() dto: SubmitFeedbackDto) {

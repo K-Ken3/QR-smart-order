@@ -45,6 +45,7 @@
     "@prisma/client": "^7.9.1",
     "@smartserve/types": "workspace:*",
     "@types/passport-google-oauth20": "^2.0.17",
+    "@types/qrcode": "^1.5.6",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -58,6 +59,7 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
+    "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.0"

@@ -26,6 +26,12 @@ export class RequestsController {
     return this.requestsService.createRequest(dto);
   }
 
+  @Public()
+  @Get('location/:locationId')
+  getRequestsByLocation(@Param('locationId') locationId: string) {
+    return this.requestsService.getRequests({ locationId });
+  }
+
   @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'KITCHEN_STAFF')
   @Get()
   getRequests(
@@ -61,7 +67,7 @@ export class RequestsController {
     return this.requestsService.updateRequestStatus(id, dto);
   }
 
-  @Public()
+  @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'KITCHEN_STAFF')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   cancelRequest(@Param('id') id: string) {

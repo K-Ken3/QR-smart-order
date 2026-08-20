@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Post,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { QrService } from './qr.service';
 import { GenerateQrDto, QrValidateDto } from './qr.dto';
@@ -24,6 +26,7 @@ export class QrController {
     return this.qrService.generateQr(locationId, dto.validityPeriod);
   }
 
+  @Public()
   @Post('qr/validate')
   @HttpCode(HttpStatus.OK)
   async validateQr(@Body() dto: QrValidateDto) {
@@ -34,6 +37,7 @@ export class QrController {
         id: context.location.id,
         name: context.location.name,
         locationType: context.location.locationType,
+        branchId: context.location.branchId,
       },
       serviceCatalog: context.serviceCatalog.map(service => ({
         id: service.id,
@@ -43,5 +47,12 @@ export class QrController {
         isActive: service.isActive,
       })),
     };
+  }
+
+  @Public()
+  @Get('qr/scan/:token/menu')
+  @HttpCode(HttpStatus.OK)
+  async getScanMenu(@Param('token') token: string) {
+    return this.qrService.getMenuByToken(token);
   }
 }

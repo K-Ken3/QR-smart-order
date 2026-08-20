@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrValidity } from '@smartserve/types';
 import * as crypto from 'crypto';
+import * as QRCode from 'qrcode';
 
 const VALIDITY_MAP: Record<QrValidity, number> = {
   HOURS_24: 24 * 60 * 60,
@@ -52,18 +53,23 @@ export class QrService {
 
     const token = this.signToken(payload, tenant.hmacSecret, expiresAtSeconds);
 
+    // Generate QR code pointing to the scan URL
+    const appUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const scanUrl = `${appUrl}/scan/${token}`;
+    const pngDataUrl = await QRCode.toDataURL(scanUrl, { width: 400, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+
     const qr = await this.prisma.qrCode.create({
       data: {
         locationId,
         token,
-        pngUrl: '',
-        svgUrl: '',
+        pngUrl: pngDataUrl,
+        svgUrl: scanUrl,
         validityPeriod,
         expiresAt: expiresAtSeconds ? new Date(expiresAtSeconds * 1000) : null,
       },
     });
 
-    return qr;
+    return { ...qr, scanUrl };
   }
 
   private signToken(payload: Record<string, unknown>, secret: string, expiresAtSeconds?: number) {
@@ -152,5 +158,19 @@ export class QrService {
       location,
       serviceCatalog: serviceCatalog?.services ?? [],
     };
+  }
+
+  async getMenuByToken(token: string) {
+    const context = await this.resolveQrContext(token);
+    const menu = await this.prisma.menu.findFirst({
+      where: { branchId: context.location.branchId },
+      include: {
+        menuItems: {
+          where: { status: 'AVAILABLE' },
+          orderBy: { displayOrder: 'asc' as const },
+        },
+      },
+    });
+    return menu ?? { menuItems: [] };
   }
 }

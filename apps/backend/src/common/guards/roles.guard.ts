@@ -42,6 +42,11 @@ export class RolesGuard implements CanActivate {
 
     const hasRole = requiredRoles.includes(user.role as UserRoleValue);
 
+    // SUPER_ADMIN has access to all endpoints
+    if (user.role === 'SUPER_ADMIN') {
+      return true;
+    }
+
     if (!hasRole) {
       throw new ForbiddenException(
         `Insufficient permissions. Required: [${requiredRoles.join(', ')}], got: ${user.role}`,

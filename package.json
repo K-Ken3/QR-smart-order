@@ -5,7 +5,8 @@
   "description": "SmartServe QR — Multi-tenant SaaS hospitality service platform",
   "scripts": {
     "dev": "pnpm --parallel --filter './apps/*' dev",
-    "build": "pnpm --recursive --filter './packages/*' build && pnpm --recursive --filter './apps/*' build",
+    "build": "pnpm --recursive --filter './packages/*' build && pnpm --filter @smartserve/frontend build",
+    "build:all": "pnpm --recursive --filter './packages/*' build && pnpm --recursive --filter './apps/*' build",
     "lint": "pnpm --recursive lint",
     "lint:fix": "pnpm --recursive lint:fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml}\" --ignore-path .gitignore",

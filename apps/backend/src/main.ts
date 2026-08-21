@@ -4,6 +4,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
 import * as rTracer from 'cls-rtracer';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
@@ -28,6 +29,13 @@ async function seedSuperAdmin(prisma: PrismaService) {
     if (existing) {
       // @ts-ignore
       await prisma.user.update({ where: { email }, data: { passwordHash } });
+      // Ensure the platform tenant has an HMAC secret
+      // @ts-ignore
+      const platTenant = await prisma.tenant.findFirst({ where: { name: 'SmartServe Platform' } });
+      if (platTenant && !platTenant.hmacSecret) {
+        // @ts-ignore
+        await prisma.tenant.update({ where: { id: platTenant.id }, data: { hmacSecret: crypto.randomBytes(32).toString('hex') } });
+      }
       console.log(`[SEED] Superadmin ${email} exists. Password hash refreshed.`);
       return;
     }
@@ -42,6 +50,7 @@ async function seedSuperAdmin(prisma: PrismaService) {
           email,
           isActive: true,
           emailVerified: true,
+          hmacSecret: crypto.randomBytes(32).toString('hex'),
         },
       });
     }

@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
@@ -34,6 +35,7 @@ export class TenantsService {
         email: normalizedEmail,
         isActive: true,
         emailVerified: true,
+        hmacSecret: crypto.randomBytes(32).toString('hex'),
         employees: {
           create: {
             email: normalizedEmail,

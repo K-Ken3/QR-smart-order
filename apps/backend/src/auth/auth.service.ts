@@ -70,6 +70,7 @@ export class AuthService {
         emailVerified: false,
         otpCode,
         otpExpiry,
+        hmacSecret: crypto.randomBytes(32).toString('hex'),
         employees: {
             create: {
               email: normalizedEmail,
@@ -417,6 +418,7 @@ export class AuthService {
             email: normalizedEmail,
             isActive: true,
             emailVerified: true,
+            hmacSecret: crypto.randomBytes(32).toString('hex'),
             employees: {
               create: ({
                 email: normalizedEmail,

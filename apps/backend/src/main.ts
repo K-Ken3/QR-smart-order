@@ -3,12 +3,58 @@ import { ValidationPipe } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
 import * as rTracer from 'cls-rtracer';
+import * as bcrypt from 'bcryptjs';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
+
+const SUPER_ADMIN_EMAIL = 'karasiraken5@gmail.com';
+const SUPER_ADMIN_PASSWORD = '20060Ken';
+
+async function seedSuperAdmin() {
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    const email = SUPER_ADMIN_EMAIL.toLowerCase().trim();
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      console.log(`[SEED] Superadmin ${email} already exists. Skipping.`);
+      await prisma.$disconnect();
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
+
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: 'SmartServe Platform',
+        email,
+        isActive: true,
+        emailVerified: true,
+      },
+    });
+
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: 'SUPER_ADMIN',
+        firstName: 'Super',
+        lastName: 'Admin',
+        tenantId: tenant.id,
+      },
+    });
+
+    console.log(`[SEED] Superadmin created: ${email}`);
+    await prisma.$disconnect();
+  } catch (err) {
+    console.error('[SEED] Failed to seed superadmin:', (err as Error).message);
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -144,7 +190,12 @@ async function bootstrap() {
   });
 
   // ──────────────────────────────────────────────
-  // 10. Start
+  // 10. Seed superadmin on first boot
+  // ──────────────────────────────────────────────
+  await seedSuperAdmin();
+
+  // ──────────────────────────────────────────────
+  // 11. Start
   // ──────────────────────────────────────────────
   const port = process.env['PORT'] ?? 3001;
   await app.listen(port, '0.0.0.0');

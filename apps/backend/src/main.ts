@@ -10,30 +10,32 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
+import { PrismaService } from './prisma/prisma.service';
 
 const SUPER_ADMIN_EMAIL = 'karasiraken5@gmail.com';
 const SUPER_ADMIN_PASSWORD = '20060Ken';
 
-async function seedSuperAdmin() {
+async function seedSuperAdmin(prisma: PrismaService) {
   try {
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
     const email = SUPER_ADMIN_EMAIL.toLowerCase().trim();
     const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
 
-    console.log(`[SEED] Connecting to database...`);
+    console.log(`[SEED] Checking for superadmin ${email}...`);
 
+    // @ts-ignore
     const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
+      // @ts-ignore
       await prisma.user.update({ where: { email }, data: { passwordHash } });
       console.log(`[SEED] Superadmin ${email} exists. Password hash refreshed.`);
-      await prisma.$disconnect();
       return;
     }
 
+    // @ts-ignore
     let tenant = await prisma.tenant.findFirst({ where: { name: 'SmartServe Platform' } });
     if (!tenant) {
+      // @ts-ignore
       tenant = await prisma.tenant.create({
         data: {
           name: 'SmartServe Platform',
@@ -44,6 +46,7 @@ async function seedSuperAdmin() {
       });
     }
 
+    // @ts-ignore
     await prisma.user.create({
       data: {
         email,
@@ -52,11 +55,11 @@ async function seedSuperAdmin() {
         firstName: 'Super',
         lastName: 'Admin',
         tenantId: tenant.id,
+        deviceTokens: [],
       },
     });
 
     console.log(`[SEED] Superadmin created: ${email}`);
-    await prisma.$disconnect();
   } catch (err) {
     console.error('[SEED] Failed to seed superadmin:', err);
   }
@@ -198,7 +201,8 @@ async function bootstrap() {
   // ──────────────────────────────────────────────
   // 10. Seed superadmin on first boot
   // ──────────────────────────────────────────────
-  await seedSuperAdmin();
+  const prisma = app.get(PrismaService);
+  await seedSuperAdmin(prisma);
 
   // ──────────────────────────────────────────────
   // 11. Start

@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "cd ../../packages/types && pnpm build && cd ../../apps/backend && nest build",
+    "build": "pnpm --filter @smartserve/types build && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",
@@ -43,7 +43,7 @@
     "@nestjs/websockets": "^10.0.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
-    "@smartserve/types": "file:../../packages/types",
+    "@smartserve/types": "workspace:*",
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/qrcode": "^1.5.6",
     "bcryptjs": "^3.0.3",

@@ -1,5 +1,5 @@
 {
-  "installCommand": "pnpm install",
+  "installCommand": "pnpm install && pnpm --filter @smartserve/backend exec prisma generate",
   "buildCommand": "pnpm --filter @smartserve/types build && cd apps/frontend && pnpm build",
   "outputDirectory": "apps/frontend/.next"
 }

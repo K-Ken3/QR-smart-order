@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 
@@ -9,13 +9,14 @@ interface LocationContext {
   serviceCatalog: { id: string; name: string; category: string; displayOrder: number }[];
 }
 
-export default function ScanPage({ params }: { params: { token: string } }) {
+export default function ScanPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
   const [context, setContext] = useState<LocationContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.post('/qr/validate', { token: params.token })
+    api.post('/qr/validate', { token })
       .then((res: any) => {
         setContext(res);
         setLoading(false);
@@ -24,7 +25,7 @@ export default function ScanPage({ params }: { params: { token: string } }) {
         setError(err.message ?? 'Invalid or expired QR code');
         setLoading(false);
       });
-  }, [params.token]);
+  }, [token]);
 
   if (loading) {
     return (
@@ -71,19 +72,19 @@ export default function ScanPage({ params }: { params: { token: string } }) {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href={`/scan/${params.token}/menu`}
+              href={`/scan/${token}/menu`}
               className="rounded-xl bg-amber-500 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-amber-400"
             >
               View Menu & Order
             </Link>
             <Link
-              href={`/scan/${params.token}/request`}
+              href={`/scan/${token}/request`}
               className="rounded-xl border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               Track Request
             </Link>
             <Link
-              href={`/scan/${params.token}/feedback`}
+              href={`/scan/${token}/feedback`}
               className="rounded-xl border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               Leave Feedback

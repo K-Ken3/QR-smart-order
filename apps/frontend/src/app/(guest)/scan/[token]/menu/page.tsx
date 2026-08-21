@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useCartStore } from '@/stores/cart.store';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
@@ -21,7 +21,8 @@ interface LocationContext {
   serviceCatalog: any[];
 }
 
-export default function GuestMenuPage({ params }: { params: { token: string } }) {
+export default function GuestMenuPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
   const [context, setContext] = useState<LocationContext | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,11 +30,11 @@ export default function GuestMenuPage({ params }: { params: { token: string } })
   const { items, addItem, removeItem, updateQuantity, clearCart, getSubtotal } = useCartStore();
 
   useEffect(() => {
-    api.post('/qr/validate', { token: params.token })
+    api.post('/qr/validate', { token: token })
       .then(async (res: any) => {
         setContext(res);
         try {
-          const menuRes = await api.get(`/qr/scan/${params.token}/menu`) as any;
+          const menuRes = await api.get(`/qr/scan/${token}/menu`) as any;
           const items: MenuItem[] = (menuRes?.menuItems ?? []).map((item: any) => ({
             ...item,
           }));
@@ -42,7 +43,7 @@ export default function GuestMenuPage({ params }: { params: { token: string } })
         setLoading(false);
       })
       .catch(() => { setLoading(false); });
-  }, [params.token]);
+  }, [token]);
 
   const grouped = menuItems.reduce<Record<string, MenuItem[]>>((acc, item) => {
     const cat = item.category;

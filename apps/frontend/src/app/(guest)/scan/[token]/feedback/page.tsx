@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, use } from 'react';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
 
-export default function GuestFeedbackPage({ params }: { params: { token: string } }) {
+export default function GuestFeedbackPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
   const [requestId, setRequestId] = useState('');
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');

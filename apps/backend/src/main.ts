@@ -21,17 +21,17 @@ async function seedSuperAdmin() {
     const email = SUPER_ADMIN_EMAIL.toLowerCase().trim();
     const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
 
+    console.log(`[SEED] Connecting to database...`);
+
     const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
-      // Ensure password hash is up to date
       await prisma.user.update({ where: { email }, data: { passwordHash } });
       console.log(`[SEED] Superadmin ${email} exists. Password hash refreshed.`);
       await prisma.$disconnect();
       return;
     }
 
-    // Find or create the platform tenant
     let tenant = await prisma.tenant.findFirst({ where: { name: 'SmartServe Platform' } });
     if (!tenant) {
       tenant = await prisma.tenant.create({
@@ -58,7 +58,7 @@ async function seedSuperAdmin() {
     console.log(`[SEED] Superadmin created: ${email}`);
     await prisma.$disconnect();
   } catch (err) {
-    console.error('[SEED] Failed to seed superadmin:', (err as Error).message);
+    console.error('[SEED] Failed to seed superadmin:', err);
   }
 }
 

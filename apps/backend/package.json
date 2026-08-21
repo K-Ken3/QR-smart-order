@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "pnpm --filter @smartserve/types build && nest build",
+    "build": "prisma migrate deploy && prisma generate && pnpm --filter @smartserve/types build && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",

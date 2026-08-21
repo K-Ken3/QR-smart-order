@@ -1,5 +1,5 @@
 {
   "installCommand": "pnpm install",
-  "buildCommand": "cd apps/frontend && pnpm build",
+  "buildCommand": "pnpm --filter @smartserve/types build && cd apps/frontend && pnpm build",
   "outputDirectory": "apps/frontend/.next"
 }

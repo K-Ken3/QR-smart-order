@@ -22,19 +22,6 @@ export class LocationsService {
       throw new NotFoundException('Branch not found');
     }
 
-    const defaultCatalog = await this.prisma.serviceCatalog.findUnique({
-      where: {
-        branchId_locationType: {
-          branchId,
-          locationType: dto.locationType,
-        },
-      },
-    });
-
-    if (!defaultCatalog) {
-      throw new NotFoundException('Default service catalog not found for this location type');
-    }
-
     const location = await this.prisma.location.create({
       data: {
         branchId,

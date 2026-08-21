@@ -171,6 +171,6 @@ export class QrService {
         },
       },
     });
-    return menu ?? { menuItems: [] };
+    return menu ? { ...menu, menuItems: menu.menuItems.map((i: any) => ({ ...i, price: Number(i.price) })) } : { menuItems: [] };
   }
 }

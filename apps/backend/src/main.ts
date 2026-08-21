@@ -111,7 +111,8 @@ async function bootstrap() {
           upgradeInsecureRequests: [],
         },
       },
-      crossOriginEmbedderPolicy: false, // Allow embedding in iframes for guest QR pages
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: false,
     }),
   );
 

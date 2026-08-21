@@ -3,6 +3,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuItemDto, UpdateMenuItemDto } from './menu.dto';
 import { MenuItemStatus } from '@prisma/client';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializePrice(item: any): any {
+  return item ? { ...item, price: Number(item.price) } : item;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializePrices(items: any[]): any[] {
+  return items.map(serializePrice);
+}
+
 @Injectable()
 export class MenuService {
   constructor(private readonly prisma: PrismaService) {}
@@ -13,7 +23,7 @@ export class MenuService {
       throw new NotFoundException('Menu not found for branch');
     }
 
-    return this.prisma.menuItem.create({
+    return serializePrice(await this.prisma.menuItem.create({
       data: {
         branchId,
         menuId: menu.id,
@@ -26,7 +36,7 @@ export class MenuService {
         displayOrder: dto.displayOrder ?? 0,
         stockQty: dto.stockQty ?? null,
       },
-    });
+    }));
   }
 
   async getMenu(branchId: string) {
@@ -39,7 +49,7 @@ export class MenuService {
       throw new NotFoundException('Menu not found for branch');
     }
 
-    return menu;
+    return { ...menu, menuItems: serializePrices(menu.menuItems) };
   }
 
   async updateMenuItem(id: string, dto: UpdateMenuItemDto) {
@@ -48,7 +58,7 @@ export class MenuService {
       throw new NotFoundException('Menu item not found');
     }
 
-    return this.prisma.menuItem.update({
+    return serializePrice(await this.prisma.menuItem.update({
       where: { id },
       data: {
         name: dto.name,
@@ -61,7 +71,7 @@ export class MenuService {
         displayOrder: dto.displayOrder,
         stockQty: dto.stockQty,
       },
-    });
+    }));
   }
 
   async deleteMenuItem(id: string) {

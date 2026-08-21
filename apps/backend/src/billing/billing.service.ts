@@ -120,10 +120,12 @@ export class BillingService {
   }
 
   async getInvoices(tenantId: string) {
-    return this.prisma.invoice.findMany({
+    const invoices = await this.prisma.invoice.findMany({
       where: { subscription: { tenantId } },
       orderBy: { createdAt: 'desc' },
     });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return invoices.map((inv: any) => ({ ...inv, amount: Number(inv.amount) }));
   }
 
   async createCheckoutSession(tenantId: string, planName: string) {

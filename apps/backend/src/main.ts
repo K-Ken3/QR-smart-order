@@ -19,24 +19,30 @@ async function seedSuperAdmin() {
     const { PrismaClient } = await import('@prisma/client');
     const prisma = new PrismaClient();
     const email = SUPER_ADMIN_EMAIL.toLowerCase().trim();
+    const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
 
     const existing = await prisma.user.findUnique({ where: { email } });
+
     if (existing) {
-      console.log(`[SEED] Superadmin ${email} already exists. Skipping.`);
+      // Ensure password hash is up to date
+      await prisma.user.update({ where: { email }, data: { passwordHash } });
+      console.log(`[SEED] Superadmin ${email} exists. Password hash refreshed.`);
       await prisma.$disconnect();
       return;
     }
 
-    const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
-
-    const tenant = await prisma.tenant.create({
-      data: {
-        name: 'SmartServe Platform',
-        email,
-        isActive: true,
-        emailVerified: true,
-      },
-    });
+    // Find or create the platform tenant
+    let tenant = await prisma.tenant.findFirst({ where: { name: 'SmartServe Platform' } });
+    if (!tenant) {
+      tenant = await prisma.tenant.create({
+        data: {
+          name: 'SmartServe Platform',
+          email,
+          isActive: true,
+          emailVerified: true,
+        },
+      });
+    }
 
     await prisma.user.create({
       data: {

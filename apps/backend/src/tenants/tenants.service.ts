@@ -207,25 +207,44 @@ export class TenantsService {
    */
   async clearAllData(): Promise<{ message: string }> {
     // @ts-ignore
+    const superAdmin = await this.prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
+    const preserveTenantId = superAdmin?.tenantId ?? '__none__';
+
+    // Get branch IDs belonging to non-superadmin tenants
+    // @ts-ignore
+    const otherBranches = await this.prisma.branch.findMany({ where: { tenantId: { not: preserveTenantId } }, select: { id: true } });
+    const otherBranchIds = otherBranches.map(b => b.id);
+    // @ts-ignore
+    const otherLocationIds = (await this.prisma.location.findMany({ where: { branchId: { in: otherBranchIds } }, select: { id: true } })).map(l => l.id);
+
+    // @ts-ignore
     await this.prisma.$transaction(async (tx) => {
-      await tx.refreshToken.deleteMany();
-      await tx.requestItem.deleteMany();
-      await tx.request.deleteMany();
-      await tx.feedback.deleteMany();
-      await tx.auditLog.deleteMany();
-      await tx.qrCode.deleteMany();
-      await tx.location.deleteMany();
-      await tx.menuItem.deleteMany();
-      await tx.menu.deleteMany();
-      await tx.service.deleteMany();
-      await tx.serviceCatalog.deleteMany();
-      await tx.invoice.deleteMany();
-      await tx.branch.deleteMany();
-      await tx.subscription.deleteMany();
-      await tx.user.deleteMany();
-      await tx.tenant.deleteMany();
+      // Delete tokens for non-superadmin users
+      const nonAdminIds = (await tx.user.findMany({ where: { role: { not: 'SUPER_ADMIN' } }, select: { id: true } })).map(u => u.id);
+      if (nonAdminIds.length) {
+        await tx.refreshToken.deleteMany({ where: { userId: { in: nonAdminIds } } });
+      }
+
+      if (otherBranchIds.length) {
+        await tx.requestItem.deleteMany({ where: { request: { branchId: { in: otherBranchIds } } } });
+        await tx.request.deleteMany({ where: { branchId: { in: otherBranchIds } } });
+        await tx.feedback.deleteMany({ where: { branchId: { in: otherBranchIds } } });
+        await tx.menuItem.deleteMany({ where: { menu: { branchId: { in: otherBranchIds } } } });
+        await tx.menu.deleteMany({ where: { branchId: { in: otherBranchIds } } });
+        await tx.serviceCatalog.deleteMany({ where: { branchId: { in: otherBranchIds } } });
+      }
+      if (otherLocationIds.length) {
+        await tx.qrCode.deleteMany({ where: { locationId: { in: otherLocationIds } } });
+        await tx.location.deleteMany({ where: { id: { in: otherLocationIds } } });
+      }
+      await tx.auditLog.deleteMany({ where: { tenantId: { not: preserveTenantId } } });
+      await tx.invoice.deleteMany({ where: { subscription: { tenantId: { not: preserveTenantId } } } });
+      await tx.subscription.deleteMany({ where: { tenantId: { not: preserveTenantId } } });
+      await tx.branch.deleteMany({ where: { tenantId: { not: preserveTenantId } } });
+      await tx.user.deleteMany({ where: { role: { not: 'SUPER_ADMIN' } } });
+      await tx.tenant.deleteMany({ where: { id: { not: preserveTenantId } } });
     });
 
-    return { message: 'All data cleared successfully' };
+    return { message: 'All data cleared successfully (superadmin preserved)' };
   }
 }

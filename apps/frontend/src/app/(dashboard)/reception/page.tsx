@@ -109,6 +109,16 @@ export default function ReceptionPage() {
     }
   }
 
+  async function handleQuickCheckout(requestId: string) {
+    try {
+      await api.post(`/requests/${requestId}/checkout`, { paymentMethod: 'MTN_MOMO' });
+      showToast('Checkout initiated', 'success');
+      loadData();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Checkout failed', 'error');
+    }
+  }
+
   const filtered = requests.filter((r) => filter === 'ALL' || r.status === filter);
   const activeEmployees = employees.filter((e) => e.isClockedIn && !['SUPER_ADMIN', 'BUSINESS_OWNER', 'GUEST'].includes(e.role));
 
@@ -172,6 +182,12 @@ export default function ReceptionPage() {
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-black hover:bg-slate-50">
                   Note
                 </button>
+                {req.status === 'COMPLETED' && (
+                  <button onClick={() => handleQuickCheckout(req.id)}
+                    className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-400">
+                    Checkout
+                  </button>
+                )}
               </div>
               {noteRequestId === req.id && (
                 <div className="mt-3 flex gap-2">

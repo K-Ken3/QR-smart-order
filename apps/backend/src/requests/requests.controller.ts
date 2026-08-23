@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { CreateRequestDto, AssignRequestDto, UpdateRequestStatusDto, AddRequestNoteDto } from './requests.dto';
+import { CreateRequestDto, AssignRequestDto, UpdateRequestStatusDto, AddRequestNoteDto, CheckoutRequestDto } from './requests.dto';
 import { RequestsService } from './requests.service';
 
 @Controller('requests')
@@ -81,5 +81,21 @@ export class RequestsController {
     @Body() dto: AddRequestNoteDto,
   ) {
     return this.requestsService.addRequestNote(id, dto);
+  }
+
+  @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST')
+  @Post(':id/checkout')
+  @HttpCode(HttpStatus.OK)
+  checkout(
+    @Param('id') id: string,
+    @Body() dto: CheckoutRequestDto,
+  ) {
+    return this.requestsService.checkoutRequest(id, dto);
+  }
+
+  @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST')
+  @Get(':id/receipt')
+  getReceipt(@Param('id') id: string) {
+    return this.requestsService.getReceipt(id);
   }
 }

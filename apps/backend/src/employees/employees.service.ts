@@ -23,6 +23,21 @@ export class EmployeesService {
       throw new NotFoundException('Branch not found');
     }
 
+    // Enforce subscription plan limits
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId: branch.tenantId },
+    });
+    if (subscription) {
+      const currentCount = await this.prisma.user.count({
+        where: { tenantId: branch.tenantId, role: { notIn: ['SUPER_ADMIN', 'BUSINESS_OWNER', 'GUEST'] } },
+      });
+      if (currentCount >= subscription.maxEmployees) {
+        throw new UnprocessableEntityException(
+          `Employee limit reached for ${subscription.plan} plan (${subscription.maxEmployees} max). Please upgrade your plan.`,
+        );
+      }
+    }
+
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase().trim() },
     });

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { CreateRequestDto, AssignRequestDto, UpdateRequestStatusDto, AddRequestNoteDto } from './requests.dto';
+import { CreateRequestDto, AssignRequestDto, UpdateRequestStatusDto, AddRequestNoteDto, CheckoutRequestDto } from './requests.dto';
 
 const DEDUP_TTL_SECONDS = 60;
 
@@ -232,14 +232,117 @@ export class RequestsService {
       where: { id },
       include: {
         location: { select: { id: true, name: true } },
+        branch: { select: { id: true, name: true, currency: true } },
         assignedTo: { select: { id: true, firstName: true, lastName: true } },
-        items: true,
+        items: {
+          include: {
+            menuItem: { select: { id: true, name: true, price: true } },
+          },
+        },
       },
     });
     if (!request) {
       throw new NotFoundException('Request not found');
     }
-    return request;
+    return {
+      ...request,
+      totalAmount: request.totalAmount != null ? Number(request.totalAmount) : null,
+      items: request.items.map((i: any) => ({ ...i, unitPrice: Number(i.unitPrice), menuItem: { ...i.menuItem, price: Number(i.menuItem?.price ?? 0) } })),
+    };
+  }
+
+  async checkoutRequest(id: string, dto: CheckoutRequestDto) {
+    const request = await this.prisma.request.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        branch: { select: { name: true, currency: true } },
+      },
+    });
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    if (request.paymentStatus === 'PAID') {
+      throw new UnprocessableEntityException('Request is already paid');
+    }
+
+    let totalAmount = 0;
+    if (request.items.length > 0) {
+      totalAmount = request.items.reduce((sum: number, item: any) => {
+        return sum + Number(item.unitPrice) * item.quantity;
+      }, 0);
+    }
+
+    const receiptNumber = `RCP-${request.branch.name.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+
+    const updated = await this.prisma.request.update({
+      where: { id },
+      data: {
+        totalAmount,
+        paymentStatus: dto.paymentMethod === 'MTN_MOMO' ? 'PAID' : 'PENDING',
+        receiptNumber,
+        ...(dto.paymentMethod === 'MTN_MOMO' && { paidAt: new Date() }),
+      },
+      include: {
+        items: true,
+        branch: { select: { name: true, currency: true } },
+        location: { select: { name: true } },
+      },
+    });
+
+    await this.publishEvent('request:checkout', {
+      requestId: updated.id,
+      receiptNumber,
+      totalAmount,
+      paymentMethod: dto.paymentMethod,
+      branchId: request.branchId,
+      tenantId: request.tenantId,
+    });
+
+    return {
+      ...updated,
+      totalAmount: Number(updated.totalAmount),
+      items: updated.items.map((i: any) => ({ ...i, unitPrice: Number(i.unitPrice) })),
+    };
+  }
+
+  async getReceipt(id: string) {
+    const request = await this.prisma.request.findUnique({
+      where: { id },
+      include: {
+        items: {
+          include: {
+            menuItem: { select: { id: true, name: true } },
+          },
+        },
+        branch: { select: { id: true, name: true, currency: true, address: true } },
+        location: { select: { name: true } },
+        assignedTo: { select: { firstName: true, lastName: true } },
+      },
+    });
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    if (!request.receiptNumber) {
+      throw new UnprocessableEntityException('No receipt available — checkout first');
+    }
+
+    return {
+      receiptNumber: request.receiptNumber,
+      totalAmount: request.totalAmount != null ? Number(request.totalAmount) : 0,
+      paymentStatus: request.paymentStatus,
+      paidAt: request.paidAt,
+      createdAt: request.createdAt,
+      branch: request.branch,
+      location: request.location,
+      items: request.items.map((i: any) => ({
+        name: i.menuItem?.name ?? 'Item',
+        quantity: i.quantity,
+        unitPrice: Number(i.unitPrice),
+        subtotal: Number(i.unitPrice) * i.quantity,
+        notes: i.notes,
+      })),
+    };
   }
 
   private async publishEvent(event: string, data: Record<string, unknown>) {

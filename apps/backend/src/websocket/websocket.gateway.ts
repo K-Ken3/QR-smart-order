@@ -77,6 +77,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       'events:request:assigned',
       'events:request:status_changed',
       'events:request:cancelled',
+      'events:request:checkout',
       'events:menu:item_updated',
       'events:catalog:updated',
       'events:order:new',

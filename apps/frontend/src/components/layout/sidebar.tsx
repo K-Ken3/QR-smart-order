@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth.store';
 
 const navigation = [
   { name: 'Reception', href: '/reception', roles: ['BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST'] },
+  { name: 'Checkout', href: '/checkout', roles: ['BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST'] },
   { name: 'Kitchen', href: '/kitchen', roles: ['BUSINESS_OWNER', 'BRANCH_MANAGER', 'KITCHEN_STAFF'] },
   { name: 'Analytics', href: '/analytics', roles: ['BUSINESS_OWNER', 'BRANCH_MANAGER'] },
   { name: 'Branches', href: '/branches', roles: ['BUSINESS_OWNER'] },

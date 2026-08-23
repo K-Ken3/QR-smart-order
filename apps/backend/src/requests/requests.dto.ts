@@ -40,3 +40,9 @@ export class AddRequestNoteDto {
   @IsString()
   note!: string;
 }
+
+export class CheckoutRequestDto {
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+}

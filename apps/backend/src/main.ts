@@ -29,46 +29,49 @@ async function seedSuperAdmin(prisma: PrismaService) {
     if (existing) {
       // @ts-ignore
       await prisma.user.update({ where: { email }, data: { passwordHash } });
-      // Ensure the platform tenant has an HMAC secret
-      // @ts-ignore
-      const platTenant = await prisma.tenant.findFirst({ where: { name: 'SmartServe Platform' } });
-      if (platTenant && !platTenant.hmacSecret) {
-        // @ts-ignore
-        await prisma.tenant.update({ where: { id: platTenant.id }, data: { hmacSecret: crypto.randomBytes(32).toString('hex') } });
-      }
       console.log(`[SEED] Superadmin ${email} exists. Password hash refreshed.`);
-      return;
-    }
-
-    // @ts-ignore
-    let tenant = await prisma.tenant.findFirst({ where: { name: 'SmartServe Platform' } });
-    if (!tenant) {
+    } else {
       // @ts-ignore
-      tenant = await prisma.tenant.create({
+      let tenant = await prisma.tenant.findFirst({ where: { name: 'SmartServe Platform' } });
+      if (!tenant) {
+        // @ts-ignore
+        tenant = await prisma.tenant.create({
+          data: {
+            name: 'SmartServe Platform',
+            email,
+            isActive: true,
+            emailVerified: true,
+            hmacSecret: crypto.randomBytes(32).toString('hex'),
+          },
+        });
+      }
+
+      // @ts-ignore
+      await prisma.user.create({
         data: {
-          name: 'SmartServe Platform',
           email,
-          isActive: true,
-          emailVerified: true,
-          hmacSecret: crypto.randomBytes(32).toString('hex'),
+          passwordHash,
+          role: 'SUPER_ADMIN',
+          firstName: 'Super',
+          lastName: 'Admin',
+          tenantId: tenant.id,
+          deviceTokens: [],
         },
       });
+      console.log(`[SEED] Superadmin created: ${email}`);
     }
 
+    // Backfill HMAC secrets for ALL tenants missing them
     // @ts-ignore
-    await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        role: 'SUPER_ADMIN',
-        firstName: 'Super',
-        lastName: 'Admin',
-        tenantId: tenant.id,
-        deviceTokens: [],
-      },
-    });
-
-    console.log(`[SEED] Superadmin created: ${email}`);
+    const tenantsWithoutSecret = await prisma.tenant.findMany({ where: { hmacSecret: null } });
+    for (const t of tenantsWithoutSecret) {
+      // @ts-ignore
+      await prisma.tenant.update({ where: { id: t.id }, data: { hmacSecret: crypto.randomBytes(32).toString('hex') } });
+      console.log(`[SEED] HMAC secret backfilled for tenant: ${t.name}`);
+    }
+    if (tenantsWithoutSecret.length > 0) {
+      console.log(`[SEED] Backfilled HMAC secrets for ${tenantsWithoutSecret.length} tenant(s)`);
+    }
   } catch (err) {
     console.error('[SEED] Failed to seed superadmin:', err);
   }

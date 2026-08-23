@@ -94,6 +94,14 @@ enum SubStatus {
   SUSPENDED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  UNPAID
+  REFUNDED
+}
+
 // ─────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────
@@ -239,6 +247,10 @@ model Request {
   startedAt    DateTime?
   completedAt  DateTime?
   cancelledAt  DateTime?
+  totalAmount  Decimal?      @db.Decimal(10, 2)
+  paymentStatus PaymentStatus? @default(UNPAID)
+  receiptNumber String?
+  paidAt       DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

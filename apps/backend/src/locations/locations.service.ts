@@ -22,6 +22,21 @@ export class LocationsService {
       throw new NotFoundException('Branch not found');
     }
 
+    // Enforce subscription plan limits
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId: branch.tenantId },
+    });
+    if (subscription) {
+      const currentCount = await this.prisma.location.count({
+        where: { branch: { tenantId: branch.tenantId }, status: 'AVAILABLE' },
+      });
+      if (currentCount >= subscription.maxLocations) {
+        throw new UnprocessableEntityException(
+          `Location limit reached for ${subscription.plan} plan (${subscription.maxLocations} max). Please upgrade your plan.`,
+        );
+      }
+    }
+
     const location = await this.prisma.location.create({
       data: {
         branchId,

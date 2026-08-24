@@ -10,6 +10,13 @@ interface BranchAnalytics {
   busiestLocations: { locationId: string; locationName: string; count: number }[];
 }
 
+interface RevenueData {
+  totalRevenue: number;
+  paidCount: number;
+  pendingCount: number;
+  avgOrderValue: number;
+}
+
 interface Employee {
   employeeId: string;
   firstName: string;
@@ -22,6 +29,7 @@ interface Employee {
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<BranchAnalytics | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [revenue, setRevenue] = useState<RevenueData | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -45,12 +53,24 @@ export default function AnalyticsPage() {
     if (fromDate) params.set('from', fromDate);
     if (toDate) params.set('to', toDate);
     try {
-      const [a, e] = await Promise.all([
+      const [a, e, reqs] = await Promise.all([
         api.get(`/analytics/branches/${id}?${params}`) as any,
         api.get(`/analytics/branches/${id}/employees?${params}`) as any,
+        api.get(`/requests?branchId=${id}`) as any,
       ]);
       setAnalytics(a);
       setEmployees(Array.isArray(e) ? e : []);
+
+      const allReqs = Array.isArray(reqs) ? reqs : reqs?.data ?? [];
+      const paidReqs = allReqs.filter((r: any) => r.paymentStatus === 'PAID');
+      const totalRevenue = paidReqs.reduce((s: number, r: any) => s + (r.totalAmount ?? 0), 0);
+      const pendingReqs = allReqs.filter((r: any) => r.paymentStatus === 'PENDING');
+      setRevenue({
+        totalRevenue,
+        paidCount: paidReqs.length,
+        pendingCount: pendingReqs.length,
+        avgOrderValue: paidReqs.length > 0 ? totalRevenue / paidReqs.length : 0,
+      });
     } catch { /* ignore */ }
   }
 
@@ -165,12 +185,22 @@ export default function AnalyticsPage() {
               <p className="text-sm text-slate-700">Total Requests</p>
               <p className="text-2xl font-bold text-black">{analytics.totalRequests}</p>
             </div>
-            {analytics.requestsByStatus.slice(0, 3).map((s) => (
-              <div key={s.status} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm text-slate-700">{s.status.replace('_', ' ')}</p>
-                <p className="text-2xl font-bold text-black">{s.count}</p>
-              </div>
-            ))}
+            {revenue && (
+              <>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-sm text-emerald-700">Revenue</p>
+                  <p className="text-2xl font-bold text-emerald-700">RWF {revenue.totalRevenue.toFixed(0)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm text-slate-700">Paid Orders</p>
+                  <p className="text-2xl font-bold text-black">{revenue.paidCount}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm text-slate-700">Avg Order Value</p>
+                  <p className="text-2xl font-bold text-black">RWF {revenue.avgOrderValue.toFixed(0)}</p>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">

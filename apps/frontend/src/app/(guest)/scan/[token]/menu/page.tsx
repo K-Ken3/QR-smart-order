@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/stores/cart.store';
 import { api } from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
@@ -23,6 +24,7 @@ interface LocationContext {
 
 export default function GuestMenuPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
+  const router = useRouter();
   const [context, setContext] = useState<LocationContext | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +58,7 @@ export default function GuestMenuPage({ params }: { params: Promise<{ token: str
     if (items.length === 0 || !context) return;
     setSubmitting(true);
     try {
-      await api.post('/requests', {
+      const res = await api.post('/requests', {
         source_type: 'QR_SCAN',
         location_id: context.location.id,
         service_type: 'FOOD_AND_BEVERAGE',
@@ -64,9 +66,14 @@ export default function GuestMenuPage({ params }: { params: Promise<{ token: str
           items: items.map((i) => ({ menuItemId: i.menuItemId, name: i.name, quantity: i.quantity, unitPrice: i.price })),
           subtotal: getSubtotal(),
         },
-      });
+      }) as any;
       clearCart();
-      showToast('Order placed successfully!', 'success');
+      const requestId = res?.requestId ?? res?.id;
+      if (requestId) {
+        router.push(`/scan/${token}/order/${requestId}`);
+      } else {
+        showToast('Order placed!', 'success');
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to place order', 'error');
     } finally {
@@ -98,7 +105,7 @@ export default function GuestMenuPage({ params }: { params: Promise<{ token: str
                     <div className="flex-1">
                       <p className="font-medium text-slate-900">{item.name}</p>
                       {item.description && <p className="text-sm text-slate-700">{item.description}</p>}
-                      <p className="text-sm font-semibold text-amber-600 mt-1">${item.price.toFixed(2)}</p>
+                      <p className="text-sm font-semibold text-amber-600 mt-1">RWF {item.price.toFixed(2)}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       {cartItem ? (
@@ -128,7 +135,7 @@ export default function GuestMenuPage({ params }: { params: Promise<{ token: str
             <div className="mx-auto max-w-3xl flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-700">{items.length} item(s)</p>
-                <p className="text-lg font-bold text-slate-900">${getSubtotal().toFixed(2)}</p>
+                <p className="text-lg font-bold text-slate-900">RWF {getSubtotal().toFixed(2)}</p>
               </div>
               <button onClick={handleOrder} disabled={submitting}
                 className="rounded-2xl bg-amber-500 px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-amber-400 disabled:opacity-50">

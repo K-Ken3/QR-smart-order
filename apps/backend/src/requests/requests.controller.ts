@@ -27,6 +27,12 @@ export class RequestsController {
   }
 
   @Public()
+  @Get('location/:locationId/active')
+  getActiveRequestsByLocation(@Param('locationId') locationId: string) {
+    return this.requestsService.getRequests({ locationId });
+  }
+
+  @Public()
   @Get('location/:locationId')
   getRequestsByLocation(@Param('locationId') locationId: string) {
     return this.requestsService.getRequests({ locationId });
@@ -41,6 +47,12 @@ export class RequestsController {
     @Query('locationId') locationId?: string,
   ) {
     return this.requestsService.getRequests({ branchId, status, serviceType, locationId });
+  }
+
+  @Public()
+  @Get(':id/public-receipt')
+  getPublicReceipt(@Param('id') id: string) {
+    return this.requestsService.getPublicReceipt(id);
   }
 
   @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'KITCHEN_STAFF')
@@ -97,5 +109,12 @@ export class RequestsController {
   @Get(':id/receipt')
   getReceipt(@Param('id') id: string) {
     return this.requestsService.getReceipt(id);
+  }
+
+  @Roles('BUSINESS_OWNER', 'BRANCH_MANAGER', 'RECEPTIONIST')
+  @Post(':id/confirm-payment')
+  @HttpCode(HttpStatus.OK)
+  confirmPayment(@Param('id') id: string) {
+    return this.requestsService.confirmPayment(id, '');
   }
 }

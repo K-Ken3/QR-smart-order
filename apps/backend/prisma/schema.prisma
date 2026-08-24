@@ -250,6 +250,7 @@ model Request {
   totalAmount  Decimal?      @db.Decimal(10, 2)
   paymentStatus PaymentStatus? @default(UNPAID)
   receiptNumber String?
+  confirmedByReceptionist Boolean @default(false)
   paidAt       DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

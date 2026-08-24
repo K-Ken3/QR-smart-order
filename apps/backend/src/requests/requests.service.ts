@@ -76,7 +76,7 @@ export class RequestsService {
       tenantId: branch.tenantId,
     });
 
-    return request;
+    return { requestId: request.id, ...request };
   }
 
   async assignRequest(id: string, dto: AssignRequestDto) {
@@ -279,9 +279,10 @@ export class RequestsService {
       where: { id },
       data: {
         totalAmount,
-        paymentStatus: dto.paymentMethod === 'MTN_MOMO' ? 'PAID' : 'PENDING',
+        paymentStatus: dto.paymentMethod === 'MTN_MOMO' ? 'PENDING' : 'PAID',
         receiptNumber,
-        ...(dto.paymentMethod === 'MTN_MOMO' && { paidAt: new Date() }),
+        confirmedByReceptionist: dto.paymentMethod === 'CASH',
+        ...(dto.paymentMethod === 'CASH' && { paidAt: new Date() }),
       },
       include: {
         items: true,
@@ -303,6 +304,78 @@ export class RequestsService {
       ...updated,
       totalAmount: Number(updated.totalAmount),
       items: updated.items.map((i: any) => ({ ...i, unitPrice: Number(i.unitPrice) })),
+    };
+  }
+
+  async confirmPayment(id: string, tenantId: string) {
+    const request = await this.prisma.request.findUnique({ where: { id } });
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    if (request.paymentStatus === 'PAID' && request.confirmedByReceptionist) {
+      throw new UnprocessableEntityException('Payment already confirmed');
+    }
+    if (request.paymentStatus !== 'PENDING' && request.paymentStatus !== 'PAID') {
+      throw new UnprocessableEntityException('Order must be checked out before confirming payment');
+    }
+
+    const updated = await this.prisma.request.update({
+      where: { id },
+      data: {
+        paymentStatus: 'PAID',
+        confirmedByReceptionist: true,
+        paidAt: new Date(),
+      },
+    });
+
+    await this.publishEvent('request:payment_confirmed', {
+      requestId: updated.id,
+      confirmedAt: updated.paidAt,
+      branchId: request.branchId,
+      tenantId: request.tenantId,
+      locationId: request.locationId,
+    });
+
+    return updated;
+  }
+
+  async getPublicReceipt(requestId: string) {
+    const request = await this.prisma.request.findUnique({
+      where: { id: requestId },
+      include: {
+        items: {
+          include: {
+            menuItem: { select: { id: true, name: true } },
+          },
+        },
+        branch: { select: { id: true, name: true, currency: true, address: true } },
+        location: { select: { name: true } },
+        assignedTo: { select: { firstName: true, lastName: true } },
+      },
+    });
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    if (!request.receiptNumber) {
+      throw new UnprocessableEntityException('No receipt available — checkout first');
+    }
+
+    return {
+      receiptNumber: request.receiptNumber,
+      totalAmount: request.totalAmount != null ? Number(request.totalAmount) : 0,
+      paymentStatus: request.paymentStatus,
+      confirmedByReceptionist: request.confirmedByReceptionist,
+      paidAt: request.paidAt,
+      createdAt: request.createdAt,
+      branch: request.branch,
+      location: request.location,
+      items: request.items.map((i: any) => ({
+        name: i.menuItem?.name ?? 'Item',
+        quantity: i.quantity,
+        unitPrice: Number(i.unitPrice),
+        subtotal: Number(i.unitPrice) * i.quantity,
+        notes: i.notes,
+      })),
     };
   }
 

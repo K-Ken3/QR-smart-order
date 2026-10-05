@@ -10,7 +10,6 @@ import * as Joi from 'joi';
       validationSchema: Joi.object({
         // Database
         DATABASE_URL: Joi.string().required(),
-        DATABASE_POOL_MAX: Joi.number().integer().default(5),
 
         // Redis
         REDIS_URL: Joi.string().default('redis://localhost:6379'),
